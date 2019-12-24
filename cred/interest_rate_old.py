@@ -1,5 +1,4 @@
 
-
 class InterestRateProvider:
     """
     Returns the interest rate for the period.
@@ -41,9 +40,9 @@ class FloatingRate(InterestRateProvider):
 class FixedRate(InterestRateProvider):
 
     def __init__(self, coupon, day_count=None, business_days=None, bd_adjustment=None):
-        super(InterestRateProvider, self).__init__(day_count=day_count,
-                                                   business_days=business_days,
-                                                   bd_adjustment=bd_adjustment)
+        super().__init__(day_count=day_count,
+                         business_days=business_days,
+                         bd_adjustment=bd_adjustment)
         self.coupon = coupon
 
     def period_interest_rate(self, interest_period, **kwargs):
