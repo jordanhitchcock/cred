@@ -6,6 +6,7 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 from cred.businessdays import is_observed_holiday, previous_business_day, following_business_day, modified_following
 
 
+
 @pytest.mark.parametrize(
     'date,calendar,expected',
     [
@@ -52,14 +53,4 @@ def test_following_business_day(date, calendar, expected):
     assert following_business_day(date, calendar) == expected
 
 
-@pytest.mark.parametrize(
-    'date,calendar,expected',
-    [
-        (datetime(2015, 1, 17), USFederalHolidayCalendar, datetime(2015, 1, 20)),  # weekend in middle of month
-        (datetime(2015, 1, 31), USFederalHolidayCalendar, datetime(2015, 1, 30)),  # last day of month is weekend
-        (datetime(2015, 3, 31), USFederalHolidayCalendar, datetime(2015, 3, 31))  # last day of month is weekday
 
-    ]
-)
-def test_modified_following(date, calendar, expected):
-    assert modified_following(date, calendar) == expected

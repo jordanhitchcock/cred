@@ -79,3 +79,10 @@ def adjust_business_days(calendar, method=modified_following):
     pass
 
 
+def actual360(date1, date2):
+    """ Return the year fraction from and including date1 to and excluding date2 on an actual / 360 basis. """
+    days = (date2 - date1).days
+    return days / 360
+
+
+
