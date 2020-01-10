@@ -67,22 +67,20 @@ def modified_following(dt, calendar):
         return previous_business_day(dt, calendar)
 
 
-def period_start_dates(start_date, end_date, roll_day, frequency):
-    pass
+def unadjusted_schedule(start_date, end_date, frequency):
+    periods = []
 
+    i = 1
+    bop = start_date
+    eop = min(end_date, start_date + frequency)
+    periods.append((bop, eop))
 
-def period_end_dates(start_date, end_date, roll_day, frequency):
-    pass
+    while eop < end_date:
+        i += 1
+        bop = eop
+        eop = min(end_date, start_date + frequency * i)
+        periods.append((bop, eop))
 
-
-def adjust_business_days(calendar, method=modified_following):
-    pass
-
-
-def actual360(date1, date2):
-    """ Return the year fraction from and including date1 to and excluding date2 on an actual / 360 basis. """
-    days = (date2 - date1).days
-    return days / 360
-
+    return periods
 
 

@@ -1,9 +1,10 @@
-import pytest
-
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import pytest
 from pandas.tseries.holiday import USFederalHolidayCalendar
 
-from cred.businessdays import is_observed_holiday, previous_business_day, following_business_day, modified_following
+from cred.businessdays import is_observed_holiday, previous_business_day, following_business_day, \
+    modified_following, unadjusted_schedule
 
 
 
@@ -52,5 +53,46 @@ def test_previous_business_day(date, calendar, expected):
 def test_following_business_day(date, calendar, expected):
     assert following_business_day(date, calendar) == expected
 
+
+@pytest.mark.parametrize(
+    'start,end,frequency,expected',
+    [
+        (datetime(2019, 1, 1), datetime(2020, 3, 1), relativedelta(months=1),
+         [
+             (datetime(2019, 1, 1), datetime(2019, 2, 1)),
+             (datetime(2019, 2, 1), datetime(2019, 3, 1)),
+             (datetime(2019, 3, 1), datetime(2019, 4, 1)),
+             (datetime(2019, 4, 1), datetime(2019, 5, 1)),
+             (datetime(2019, 5, 1), datetime(2019, 6, 1)),
+             (datetime(2019, 6, 1), datetime(2019, 7, 1)),
+             (datetime(2019, 7, 1), datetime(2019, 8, 1)),
+             (datetime(2019, 8, 1), datetime(2019, 9, 1)),
+             (datetime(2019, 9, 1), datetime(2019, 10, 1)),
+             (datetime(2019, 10, 1), datetime(2019, 11, 1)),
+             (datetime(2019, 11, 1), datetime(2019, 12, 1)),
+             (datetime(2019, 12, 1), datetime(2020, 1, 1)),
+             (datetime(2020, 1, 1), datetime(2020, 2, 1)),
+             (datetime(2020, 2, 1), datetime(2020, 3, 1))
+         ]),
+        (datetime(2019, 1, 1), datetime(2020, 4, 1), relativedelta(months=3),
+         [
+             (datetime(2019, 1, 1), datetime(2019, 4, 1)),
+             (datetime(2019, 4, 1), datetime(2019, 7, 1)),
+             (datetime(2019, 7, 1), datetime(2019, 10, 1)),
+             (datetime(2019, 10, 1), datetime(2020, 1, 1)),
+             (datetime(2020, 1, 1), datetime(2020, 4, 1))
+         ]),
+        (datetime(2019, 1, 1), datetime(2021, 7, 1), relativedelta(months=6),
+         [
+             (datetime(2019, 1, 1), datetime(2019, 7, 1)),
+             (datetime(2019, 7, 1), datetime(2020, 1, 1)),
+             (datetime(2020, 1, 1), datetime(2020, 7, 1)),
+             (datetime(2020, 7, 1), datetime(2021, 1, 1)),
+             (datetime(2021, 1, 1), datetime(2021, 7, 1))
+         ])
+    ]
+)
+def test_unadjusted_schedule(start, end, frequency, expected):
+    assert unadjusted_schedule(start, end, frequency) == expected
 
 

@@ -1,48 +1,40 @@
 
 import pytest
 
-from cred.borrowing import Borrowing
-
-
-@pytest.fixture
-def fixed_io_borrowing():
-    borrowing = Borrowing()
-    return borrowing
-
 
 @pytest.fixture
 def floating_io_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
 @pytest.fixture
 def fixed_constant_pmt_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
 @pytest.fixture
 def fixed_custom_amort_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
 @pytest.fixture
 def floating_custom_amort_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
 @pytest.fixture
 def fixed_custom_accreting_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
 @pytest.fixture
 def floating_custom_accreting_borrowing():
-    borrowing = Borrowing()
+    borrowing = AbstractBorrowing()
     return borrowing
 
 
@@ -79,7 +71,7 @@ def test_floating_io_schedule(floating_io_borrowing):
     assert actual == expected
 
 
-def fixed_constant_pmt_schedule(fixed_constant_pmt_borrowing):
+def test_fixed_constant_pmt_schedule(fixed_constant_pmt_borrowing):
     actual = fixed_constant_pmt_borrowing.schedule()
 
     expected = {
@@ -95,7 +87,7 @@ def fixed_constant_pmt_schedule(fixed_constant_pmt_borrowing):
     assert actual == expected
 
 
-def fixed_custom_amort_schedule(fixed_custom_amort_borrowing):
+def test_fixed_custom_amort_schedule(fixed_custom_amort_borrowing):
     actual = fixed_custom_amort_borrowing.schedule()
 
     expected = {
@@ -111,7 +103,7 @@ def fixed_custom_amort_schedule(fixed_custom_amort_borrowing):
     assert actual == expected
 
 
-def floating_custom_amort_schedule(floating_custom_amort_borrowing):
+def test_floating_custom_amort_schedule(floating_custom_amort_borrowing):
     actual = floating_custom_amort_borrowing.schedule()
 
     expected = {
@@ -128,7 +120,7 @@ def floating_custom_amort_schedule(floating_custom_amort_borrowing):
     assert actual == expected
 
 
-def fixed_custom_accreting_schedule(fixed_custom_accreting_borrowing):
+def test_fixed_custom_accreting_schedule(fixed_custom_accreting_borrowing):
     actual = fixed_custom_accreting_borrowing.schedule()
 
     expected = {
@@ -144,7 +136,7 @@ def fixed_custom_accreting_schedule(fixed_custom_accreting_borrowing):
     assert actual == expected
 
 
-def floating_custom_accreting_schedule(floating_custom_accreting_borrowing):
+def test_floating_custom_accreting_schedule(floating_custom_accreting_borrowing):
     actual = floating_custom_accreting_borrowing.schedule()
 
     expected = {
