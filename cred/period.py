@@ -1,16 +1,17 @@
+from cred.interest_rate import actual360, thirty360
 
 
 class Period:
 
-    def __init__(self, id, start, end, previous_period, rules={}):  # Rules as collections.OrderedDict
+    def __init__(self, id, start_date, end_date, previous_period, rules={}):  # Rules as collections.OrderedDict
         self.id = id
-        self.start = start
-        self.end = end
+        self.start_date = start_date
+        self.end_date = end_date
         self.previous_period = previous_period
         self.schedule = {}
 
-        self.schedule['start_date'] = self.start
-        self.schedule['end_date'] = self.end
+        self.schedule['start_date'] = self.start_date
+        self.schedule['end_date'] = self.end_date
 
         for name, func in rules.items():
             schedule_value = func(self)
@@ -43,7 +44,7 @@ def eop_principal(bop_principal_attr='bop_principal', principal_pmt_attr=['princ
 
 def interest_only(maturity_date, bop_principal_attr='bop_principal'):
     def principal_pmt(period):
-        if period.end == maturity_date:
+        if period.end_date == maturity_date:
             return period.__getattribute__(bop_principal_attr)
 
         return 0
@@ -59,9 +60,9 @@ def fixed_interest_rate(coupon):
     return interest_rate
 
 
-def interest_pmt(yearfrac='actual360', bop_principal_attr='bop_principal', interest_rate_attr='interest_rate'):
+def interest_pmt(yearfrac_method=actual360, bop_principal_attr='bop_principal', interest_rate_attr='interest_rate'):
     def interest(period):
-        yearfrac = (period.end - period.start).days / 360
+        yearfrac = yearfrac_method(period.start_date, period.end_date)
         return period.__getattribute__(bop_principal_attr) * yearfrac * period.__getattribute__(interest_rate_attr)
 
     return interest

@@ -7,14 +7,14 @@ from cred.businessdays import unadjusted_schedule
 
 
 class Borrowing:
-    def __init__(self, start, end, frequency, period_rules):
-        self.start = start
-        self.end = end
+    def __init__(self, start_date, end_date, frequency, period_rules):
+        self.start_date = start_date
+        self.end_date = end_date
         self.frequency = frequency
         self.period_rules = period_rules
 
     def schedule(self):
-        unadj_dates = unadjusted_schedule(self.start, self.end, self.frequency)
+        unadj_dates = unadjusted_schedule(self.start_date, self.end_date, self.frequency)
         i = 1
         periods = []
 
@@ -35,7 +35,7 @@ class Borrowing:
 
 class FixedRateBorrowing(Borrowing):
 
-    def __init__(self, start, end, frequency, coupon, initial_principal):
+    def __init__(self, start_date, end_date, frequency, coupon, initial_principal):
         self.coupon = coupon
         self.initial_principal = initial_principal
 
@@ -43,9 +43,9 @@ class FixedRateBorrowing(Borrowing):
         rules['bop_principal'] = bop_principal(initial_principal)
         rules['interest_rate'] = fixed_interest_rate(coupon)
         rules['interest_pmt'] = interest_pmt()
-        rules['principal'] = interest_only(end)
+        rules['principal'] = interest_only(end_date)
         rules['eop_principal'] = eop_principal()
 
-        super().__init__(start, end, frequency, period_rules=rules)
+        super().__init__(start_date, end_date, frequency, period_rules=rules)
 
 
