@@ -1,4 +1,19 @@
+from pandas.tseries.holiday import AbstractHolidayCalendar, HolidayCalendarFactory
+
 from cred.interest_rate import actual360, thirty360
+from cred.businessdays import FederalReserveHolidays, LondonBankHolidays, modified_following
+
+
+START_DATE = 'start_date'
+END_DATE = 'end_date'
+ADJ_START_DATE = 'adj_start_date'
+ADJ_END_DATE = 'adj_end_date'
+BOP_PRINCIPAL = 'bop_principal'
+EOP_PRINCIPAL = 'eop_principal'
+PRINCIPAL_PAYMENT = 'principal'
+INTEREST_RATE = 'interest_rate'
+INTEREST_PAYMENT = 'interest_payment'
+INDEX_RATE = 'index_rate'
 
 
 class Period:
@@ -10,8 +25,8 @@ class Period:
         self.previous_period = previous_period
         self.schedule = {}
 
-        self.schedule['start_date'] = self.start_date
-        self.schedule['end_date'] = self.end_date
+        self.schedule[START_DATE] = self.start_date
+        self.schedule[END_DATE] = self.end_date
 
         for name, func in rules.items():
             schedule_value = func(self)
@@ -20,8 +35,35 @@ class Period:
             self.schedule[name] = schedule_value
 
 
+# Date functions
+def adj_date(unadj_date_attr, calendars=[FederalReserveHolidays, LondonBankHolidays], convention=modified_following):
+    """
+    Factory to create a Period rule that returns date adjusted for calendar holidays based on the convention for date at the specified Period attribute.
+
+    :param unadj_date_attr: Name of unadjusted Period date attribute
+    :type unadj_date_attr: str
+    :param calendars: List of Pandas HolidayCalendars
+    :type calendars: list
+    :param convention: Adjustment convention
+    :type convention: func
+    :return: A Period rule function for adjusted date
+    """
+    holiday_cal = calendars[0]
+    if len(calendars) > 0:
+
+        for additional_cal in calendars:
+            holiday_cal = HolidayCalendarFactory(holiday_cal.__name__ + additional_cal.__name__, holiday_cal, additional_cal)
+
+    def adj_func(period):
+        unadj_date = period.__getattribute__(unadj_date_attr)
+
+        return modified_following(unadj_date, holiday_cal)
+
+    return adj_func
+
+
 # Principal functions
-def bop_principal(initial_principal, eop_attr='eop_principal'):
+def bop_principal(initial_principal, eop_attr=EOP_PRINCIPAL):
     def bop_principal(period):
         if period.previous_period is not None:
             return period.previous_period.__getattribute__(eop_attr)
@@ -30,7 +72,7 @@ def bop_principal(initial_principal, eop_attr='eop_principal'):
     return bop_principal
 
 
-def eop_principal(bop_principal_attr='bop_principal', principal_pmt_attr=['principal']):
+def eop_principal(bop_principal_attr=BOP_PRINCIPAL, principal_pmt_attr=[PRINCIPAL_PAYMENT]):
     def eop_principal(period):
         principal_pmts = 0
         for attr in principal_pmt_attr:
@@ -42,7 +84,7 @@ def eop_principal(bop_principal_attr='bop_principal', principal_pmt_attr=['princ
     return eop_principal
 
 
-def interest_only(maturity_date, bop_principal_attr='bop_principal'):
+def interest_only(maturity_date, bop_principal_attr=BOP_PRINCIPAL):
     def principal_pmt(period):
         if period.end_date == maturity_date:
             return period.__getattribute__(bop_principal_attr)
@@ -54,16 +96,65 @@ def interest_only(maturity_date, bop_principal_attr='bop_principal'):
 
 # Interest functions
 def fixed_interest_rate(coupon):
+    """
+    Factory for fixed rate Period rules.
+
+    :param coupon: Coupon rate
+    :type coupon: float
+    :return: Period rule function for the coupon rate
+    """
     def interest_rate(period):
         return coupon
 
     return interest_rate
 
 
-def interest_pmt(yearfrac_method=actual360, bop_principal_attr='bop_principal', interest_rate_attr='interest_rate'):
+def interest_pmt(yearfrac_method=actual360, bop_principal_attr=BOP_PRINCIPAL, interest_rate_attr=INTEREST_RATE):
+    """
+    Factory for interest payment Period rules.
+
+    :param yearfrac_method: Day count convention, defaults to `actual360`
+    :type yearfrac_method: function
+    :param bop_principal_attr: Beginning of period principal balance attribute name, defaults to "bop_principal"
+    :type bop_principal_attr: str
+    :param interest_rate_attr: Interest rate attribute name, defaults to "interest_rate"
+    :type interest_rate_attr: str
+    :return: Returns a function to be used as a Period rule for interest payments
+    """
     def interest(period):
         yearfrac = yearfrac_method(period.start_date, period.end_date)
         return period.__getattribute__(bop_principal_attr) * yearfrac * period.__getattribute__(interest_rate_attr)
 
     return interest
 
+
+def index_rate(index_provider):
+    """
+    Factory for index rate Period rules for floating rate Periods.
+
+    :param index_provider: Object that returns the index rate in response to `obj.rate(period)`
+    :type index_provider: object
+    :return: Returns a function to be used as a Period rule for the index rate
+    """
+    def index_rate_func(period):
+        rate = index_provider.rate(period.start_date)
+
+        return rate
+
+    return index_rate_func
+
+
+def floating_interest_rate(spread, index_rate_attr=INDEX_RATE):
+    """
+    Factory for floating interest rate (spread plus index rate) Period rules.
+
+    :param spread: Loan spread
+    :type spread: float
+    :param index_rate_attr: Index rate rule name
+    :type index_rate_attr: str
+    :return: Returns a function to be used as a Period rule for the interest rate (index plus spread)
+    """
+    def interest_rate(period):
+        return period.__getattribute__(index_rate_attr) + spread
+
+    return interest_rate
