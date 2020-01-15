@@ -8,9 +8,6 @@ from cred.businessdays import unadjusted_schedule
 
 
 class Borrowing:
-    # TODO: Split out Borrowing into another abstract layer that includes common mortgage operations like prepayment? (from which FixedRateBorrowing and FloatingRateBorrowing would inherit)
-    # Put common/default col names there?
-    # Would allow direct reference to things like initial principal attribute, etc.
 
     def __init__(self, start_date, end_date, frequency, period_rules):
         """
@@ -62,17 +59,6 @@ class Borrowing:
             schedule = schedule[schedule[END_DATE] <= end_date]
 
         return schedule[attr_names]
-
-    def repayment_cost(self, exit_date, *args, **kwargs):
-        raise NotImplementedError
-
-    # TODO: Refactor all below to sandwich class
-    def cash_flow(self, exit_date=None):
-        """ Returns scheduled payments through optional exit date, including initial funding and exit costs."""
-        pmts = self.scheduled_cash_flow(INTEREST_PAYMENT, end_date=exit_date) + \
-               self.scheduled_cash_flow(PRINCIPAL_PAYMENT, end_date=exit_date)
-        exit_pmt = self.repayment_cost(exit_date)
-        return [-self.initial_principal, *pmts.iloc[:-1], pmts.iloc[-1] + exit_pmt]
 
 
 class FixedRateBorrowing(Borrowing):
@@ -147,9 +133,4 @@ class FloatingRateBorrowing(Borrowing):
         rules[EOP_PRINCIPAL] = eop_principal()
 
         super().__init__(start_date, end_date, frequency, period_rules=rules)
-
-    def repayment_cost(self, exit_date):
-        breakage = ((self.end_date - exit_date).days / 365) // 1 / 100
-        principal_due = float(self.scheduled_cash_flow(EOP_PRINCIPAL, exit_date - self.frequency, exit_date))
-        return principal_due * (1 + breakage)
 
