@@ -1,3 +1,4 @@
+from dateutil.relativedelta import relativedelta
 from pandas.tseries.holiday import AbstractHolidayCalendar, HolidayCalendarFactory
 
 from cred.interest_rate import actual360, thirty360
@@ -57,7 +58,7 @@ def adj_date(unadj_date_attr, calendars=[FederalReserveHolidays, LondonBankHolid
     def adj_func(period):
         unadj_date = period.__getattribute__(unadj_date_attr)
 
-        return modified_following(unadj_date, holiday_cal)
+        return modified_following(unadj_date, holiday_cal())
 
     return adj_func
 
@@ -90,6 +91,52 @@ def interest_only(maturity_date, bop_principal_attr=BOP_PRINCIPAL):
             return period.__getattribute__(bop_principal_attr)
 
         return 0
+
+    return principal_pmt
+
+
+def constant_pmt_amort(amort_start,
+                       maturity_date,
+                       amort_periods,
+                       freq,
+                       annual_rate,
+                       initial_principal,
+                       fv=0,
+                       interest_attr=INTEREST_PAYMENT,
+                       bop_principal_attr=BOP_PRINCIPAL):
+    """
+    Factory for constant payment amortization Period rules.
+
+    :param amort_start: First unadjusted amortization payment date, payments before this date are interest only
+    :type amort_start: datetime
+    :param maturity_date: Borrowing maturity date
+    :type maturity_date: datetime
+    :param amort_periods: Total amortization periods
+    :type amort_periods: int
+    :param freq: Amortization payment frequency
+    :type freq: relativedelta
+    :param annual_rate: Annual interest rate for calculating payment amount
+    :type annual_rate: float
+    :param initial_principal: Initial principal
+    :type initial_principal: int, float
+    :param fv: Future value
+    :type fv: int, float
+    :param interest_attr: Name of interest payment attribute, defaults to interest_payment
+    :type interest_attr: str
+    :param bop_principal_attr: Beginning of period principal attribute name, default to bop_principal
+    :type bop_principal_attr: str
+    :return: func
+    """
+    yearfac = ((freq.years * 360) + (freq.months * 30) + freq.days) / 360
+    periodic_rate = annual_rate * yearfac
+    pmt = (initial_principal - fv) * (periodic_rate + (periodic_rate / ((1 + periodic_rate) ** amort_periods - 1)))
+
+    def principal_pmt(period):
+        if period.end_date == maturity_date:
+            return period.__getattribute__(bop_principal_attr)
+        elif period.end_date < amort_start:
+            return 0
+        return pmt - period.__getattribute__(interest_attr)
 
     return principal_pmt
 

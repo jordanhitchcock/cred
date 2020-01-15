@@ -33,7 +33,7 @@ class LondonBankHolidays(AbstractHolidayCalendar):
 
 def is_observed_holiday(dt, calendar):
     """ Return True if dt is a holiday in calendar."""
-    return dt in calendar().holidays(start=dt, end=dt, return_name=False)
+    return dt in calendar.holidays(start=dt, end=dt, return_name=False)
 
 
 def previous_business_day(dt, calendar):

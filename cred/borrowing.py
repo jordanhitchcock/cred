@@ -3,11 +3,15 @@ from collections import OrderedDict
 from pandas import DataFrame
 
 from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, index_rate, floating_interest_rate
-from cred.period import ADJ_START_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
+from cred.period import START_DATE, END_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
 from cred.businessdays import unadjusted_schedule
 
 
 class Borrowing:
+    # TODO: Split out Borrowing into another abstract layer that includes common mortgage operations like prepayment? (from which FixedRateBorrowing and FloatingRateBorrowing would inherit)
+    # Put common/default col names there?
+    # Would allow direct reference to things like initial principal attribute, etc.
+
     def __init__(self, start_date, end_date, frequency, period_rules):
         """
         Base level Borrowing class. Custom Borrowing classes should subclass Borrowing.
@@ -27,6 +31,7 @@ class Borrowing:
         self.period_rules = period_rules
 
     def schedule(self):
+        """ Builds Periods and returns a DataFrame of aggregated Period.schedule."""
         unadj_dates = unadjusted_schedule(self.start_date, self.end_date, self.frequency)
         i = 1
         periods = []
@@ -45,12 +50,36 @@ class Borrowing:
 
         return DataFrame(schedules)
 
+    def scheduled_cash_flow(self, attr_names, start_date=None, end_date=None):
+        """ Return cash flows for attribute name(s) with optional start and end dates. attr_names can
+        either be a string or list of names. Returns Series if one cash flow or DataFrame if more than one.
+        """
+        schedule = self.schedule()
+
+        if start_date is not None:
+            schedule = schedule[schedule[START_DATE] >= start_date]
+        if end_date is not None:
+            schedule = schedule[schedule[END_DATE] <= end_date]
+
+        return schedule[attr_names]
+
+    def repayment_cost(self, exit_date, *args, **kwargs):
+        raise NotImplementedError
+
+    # TODO: Refactor all below to sandwich class
+    def cash_flow(self, exit_date=None):
+        """ Returns scheduled payments through optional exit date, including initial funding and exit costs."""
+        pmts = self.scheduled_cash_flow(INTEREST_PAYMENT, end_date=exit_date) + \
+               self.scheduled_cash_flow(PRINCIPAL_PAYMENT, end_date=exit_date)
+        exit_pmt = self.repayment_cost(exit_date)
+        return [-self.initial_principal, *pmts.iloc[:-1], pmts.iloc[-1] + exit_pmt]
+
 
 class FixedRateBorrowing(Borrowing):
 
-    def __init__(self, start_date, end_date, frequency, coupon, initial_principal):
+    def __init__(self, start_date, end_date, frequency, coupon, initial_principal, amort=None):
         """
-        Borrowing sublcass for fixed rate debt.
+        Borrowing subclass for fixed rate debt.
 
         :param start_date: Borrowing start date
         :type start_date: datetime
@@ -62,17 +91,22 @@ class FixedRateBorrowing(Borrowing):
         :type coupon: float
         :param initial_principal: Initial principal amount
         :type initial_principal: float, int
+        :param amort: Amortization rule or None (default), if None then interest only.
+        :type amort: func, None
         """
         self.coupon = coupon
         self.initial_principal = initial_principal
 
         rules = OrderedDict()
-        rules[ADJ_START_DATE] = adj_date('start_date')
-        rules[ADJ_END_DATE] = adj_date('end_date')
+        # rules[ADJ_START_DATE] = adj_date('start_date')
+        # rules[ADJ_END_DATE] = adj_date('end_date')
         rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
         rules[INTEREST_RATE] = fixed_interest_rate(coupon)
         rules[INTEREST_PAYMENT] = interest_pmt()
-        rules[PRINCIPAL_PAYMENT] = interest_only(end_date)
+        if amort is None:
+            rules[PRINCIPAL_PAYMENT] = interest_only(end_date)
+        else:
+            rules[PRINCIPAL_PAYMENT] = amort
         rules[EOP_PRINCIPAL] = eop_principal()
 
         super().__init__(start_date, end_date, frequency, period_rules=rules)
@@ -100,10 +134,11 @@ class FloatingRateBorrowing(Borrowing):
         """
         self.spread = spread
         self.index_rate_provider = index_rate_provider
+        self.initial_principal = initial_principal
 
         rules = OrderedDict()
-        rules[ADJ_START_DATE] = adj_date('start_date')
-        rules[ADJ_END_DATE] = adj_date('end_date')
+        # rules[ADJ_START_DATE] = adj_date('start_date')
+        # rules[ADJ_END_DATE] = adj_date('end_date')
         rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
         rules[INDEX_RATE] = index_rate(self.index_rate_provider)
         rules[INTEREST_RATE] = floating_interest_rate(self.spread)
@@ -112,4 +147,9 @@ class FloatingRateBorrowing(Borrowing):
         rules[EOP_PRINCIPAL] = eop_principal()
 
         super().__init__(start_date, end_date, frequency, period_rules=rules)
+
+    def repayment_cost(self, exit_date):
+        breakage = ((self.end_date - exit_date).days / 365) // 1 / 100
+        principal_due = float(self.scheduled_cash_flow(EOP_PRINCIPAL, exit_date - self.frequency, exit_date))
+        return principal_due * (1 + breakage)
 
