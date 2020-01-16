@@ -13,7 +13,7 @@ BOP_PRINCIPAL = 'bop_principal'
 EOP_PRINCIPAL = 'eop_principal'
 PRINCIPAL_PAYMENT = 'principal'
 INTEREST_RATE = 'interest_rate'
-INTEREST_PAYMENT = 'interest_payment'
+INTEREST_PAYMENT = 'interest'
 INDEX_RATE = 'index_rate'
 
 
@@ -121,7 +121,7 @@ def constant_pmt_amort(amort_start,
     :type initial_principal: int, float
     :param fv: Future value
     :type fv: int, float
-    :param interest_attr: Name of interest payment attribute, defaults to interest_payment
+    :param interest_attr: Name of interest payment attribute, defaults to interest
     :type interest_attr: str
     :param bop_principal_attr: Beginning of period principal attribute name, default to bop_principal
     :type bop_principal_attr: str

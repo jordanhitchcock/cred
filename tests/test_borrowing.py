@@ -1,6 +1,15 @@
-
+from cred import FixedRateBorrowing, thirty360
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import pytest
+import pandas as pd
 
+# TODO clean up testing for Borrowing
+
+@pytest.fixture
+def fixed_io_borrowing():
+    borrowing = FixedRateBorrowing(datetime(2020,1,1), datetime(2020,7,1), relativedelta(months=1), 0.05, -100, day_count=thirty360)
+    return borrowing
 
 @pytest.fixture
 def floating_io_borrowing():
@@ -41,17 +50,16 @@ def floating_custom_accreting_borrowing():
 def test_fixed_io_schedule(fixed_io_borrowing):
     actual = fixed_io_borrowing.schedule()
 
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.0] * 6,
+    expected = pd.DataFrame({
+        'start_date': [datetime(2020,1,1), datetime(2020,2,1), datetime(2020,3,1), datetime(2020,4,1), datetime(2020,5,1), datetime(2020,6,1)],
+        'end_date': [datetime(2020, 2, 1), datetime(2020, 3, 1), datetime(2020, 4, 1), datetime(2020, 5, 1), datetime(2020, 6, 1), datetime(2020, 7, 1)],
+        'bop_principal': [-100] * 6,
         'interest_rate': [0.05] * 6,
-        'interest': [-5.0] * 6,
-        'principal': [0.0] * 5 + [-100.0],
-        'payment': [-5.0] * 5 + [-105.0],
-        'eop_principal': [-100.0] * 5 + [0.0]
-    }
-
-    assert actual == expected
+        'interest': [-5 / 12] * 6,
+        'principal': [0] * 5 + [-100],
+        'eop_principal': [-100] * 5 + [0]
+    })
+    pd.testing.assert_frame_equal(actual, expected)
 
 
 def test_floating_io_schedule(floating_io_borrowing):
@@ -63,7 +71,7 @@ def test_floating_io_schedule(floating_io_borrowing):
         'index_rate': [0.02] * 3 + [0.03] * 3,
         'interest_rate': [0.05] * 3 + [0.06] * 3,
         'interest': [-5.0] * 3 + [-6.0] * 3,
-        'principal': [0.0] * 5 + [-100.0],
+        'principal': [0] * 5 + [-100],
         'payment': [-5.0] * 3 + [-6.0] * 2 + [-106.0],
         'eop_principal': [-100.0] * 5 + [0.0]
     }
