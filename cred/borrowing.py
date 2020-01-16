@@ -68,7 +68,7 @@ class Borrowing:
 
 class FixedRateBorrowing(Borrowing):
 
-    def __init__(self, start_date, end_date, frequency, coupon, initial_principal, amort=None):
+    def __init__(self, start_date, end_date, frequency, coupon, initial_principal, amort=None, **kwargs):
         """
         Borrowing subclass for fixed rate debt.
 
@@ -105,7 +105,7 @@ class FixedRateBorrowing(Borrowing):
 
 class FloatingRateBorrowing(Borrowing):
 
-    def __init__(self, start_date, end_date, frequency, spread, index_rate_provider, initial_principal):
+    def __init__(self, start_date, end_date, frequency, spread, index_rate_provider, initial_principal, **kwargs):
         """
         Borrowing subclass for floating rate borrowings. The index_rate_provider should be an object that provides the
         applicable rate when obj.rate(datetime) is called.
