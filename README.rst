@@ -106,7 +106,7 @@ In addition to calculating schedules, **Borrowings** also has the following meth
 * **repayment_amount(self, date)** : Implemented in subclasses, returns total repayment amount for ``date``
 * **net_cash_flows(self, exit_date, pmt_attrs=[INTEREST_PAYMENT, PRINCIPAL_PAYMENT])** : Net payments through ``date`` including initial funding and repayment costs
 
-For example, to calculate the effective borrowing cost of the previous fixed borrowing was prepaid after three quarters:
+For example, to calculate the effective borrowing cost if the previous fixed borrowing was prepaid after three quarters:
 
 .. code-block::
 
