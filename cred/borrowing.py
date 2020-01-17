@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from dateutil.relativedelta import relativedelta
 
 from pandas import DataFrame, Series
 
@@ -149,7 +150,8 @@ class PeriodicBorrowing(Borrowing):
 
 class FixedRateBorrowing(PeriodicBorrowing):
 
-    def __init__(self, start_date, end_date, frequency, coupon, initial_principal, amort=None, repayment=None, **kwargs):
+    def __init__(self, start_date, end_date, coupon, initial_principal, amort=None, frequency=relativedelta(months=1),
+                 repayment=None, **kwargs):
         """
         Borrowing subclass for fixed rate debt.
 
@@ -157,14 +159,14 @@ class FixedRateBorrowing(PeriodicBorrowing):
         :type start_date: datetime
         :param end_date: Borrowing end date
         :type end_date: datetime
-        :param frequency: Period frequency, defaults to monthly
-        :type frequency: dateutil.relativedelta
         :param coupon: Coupon rate
         :type coupon: float
         :param initial_principal: Initial principal amount
         :type initial_principal: float, int
         :param amort: Amortization rule or None (default), if None then interest only.
         :type amort: func, None
+        :param frequency: Period frequency, defaults to monthly
+        :type frequency: dateutil.relativedelta
         :param repayment: Repayment method
         :type repayment: func
         """
@@ -187,8 +189,8 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
 class FloatingRateBorrowing(PeriodicBorrowing):
 
-    def __init__(self, start_date, end_date, frequency, spread, index_rate_provider, initial_principal,
-                 repayment=open_repayment, **kwargs):
+    def __init__(self, start_date, end_date, spread, index_rate_provider, initial_principal,
+                 frequency=relativedelta(months=1), repayment=open_repayment, **kwargs):
         """
         Borrowing subclass for floating rate borrowings. The index_rate_provider should be an object that provides the
         applicable rate when obj.rate(datetime) is called.
@@ -197,14 +199,14 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         :type start_date: datetime
         :param end_date: Borrowing end date
         :type end_date: datetime
-        :param frequency: Period frequency, defaults to monthly
-        :type frequency: dateutil.relativedelta
         :param spread: Borrowing interest rate spread
         :type spread: float
         :param index_rate_provider: Object that provides index rates when obj.rate(datetime) is called
         :type index_rate_provider: object
         :param initial_principal: Initial principal balance
         :type initial_principal: float, int
+        :param frequency: Period frequency, defaults to monthly
+        :type frequency: dateutil.relativedelta
         :param repayment: Repayment method, default is open
         :type repayment: func
         """
