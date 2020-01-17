@@ -1,8 +1,9 @@
 from cred import FixedRateBorrowing, thirty360
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import pytest
+
 import pandas as pd
+import pytest
 
 # TODO clean up testing for Borrowing
 
@@ -55,8 +56,8 @@ def test_fixed_io_schedule(fixed_io_borrowing):
         'end_date': [datetime(2020, 2, 1), datetime(2020, 3, 1), datetime(2020, 4, 1), datetime(2020, 5, 1), datetime(2020, 6, 1), datetime(2020, 7, 1)],
         'bop_principal': [-100] * 6,
         'interest_rate': [0.05] * 6,
-        'interest': [-5 / 12] * 6,
-        'principal': [0] * 5 + [-100],
+        'interest_payment': [-5 / 12] * 6,
+        'principal_payment': [0] * 5 + [-100],
         'eop_principal': [-100] * 5 + [0]
     })
     pd.testing.assert_frame_equal(actual, expected)

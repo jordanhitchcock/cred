@@ -11,9 +11,9 @@ ADJ_START_DATE = 'adj_start_date'
 ADJ_END_DATE = 'adj_end_date'
 BOP_PRINCIPAL = 'bop_principal'
 EOP_PRINCIPAL = 'eop_principal'
-PRINCIPAL_PAYMENT = 'principal'
+PRINCIPAL_PAYMENT = 'principal_payment'
 INTEREST_RATE = 'interest_rate'
-INTEREST_PAYMENT = 'interest'
+INTEREST_PAYMENT = 'interest_payment'
 INDEX_RATE = 'index_rate'
 
 
