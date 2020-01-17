@@ -1,6 +1,7 @@
 from dateutil.relativedelta import relativedelta
 
 
+# TODO: One month offset end of month
 # Absolute is applied before relative
 eom_offset = relativedelta(months=1, day=1, days=-1)
 

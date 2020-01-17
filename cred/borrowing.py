@@ -6,9 +6,8 @@ from cred.businessdays import unadjusted_schedule
 from cred.interest_rate import actual360, thirty360
 from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, index_rate, floating_interest_rate
 from cred.period import START_DATE, END_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
-from cred.businessdays import unadjusted_schedule
 
-
+# TODO: Handle repayment dates in the middle of a period
 # PeriodicBorrowing repayment functions factories
 # return 0 if exit date is maturity
 def open_repayment(borrowing, date):
@@ -171,6 +170,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
         """
         self.coupon = coupon
         self.initial_principal = initial_principal
+        self.repayment_amount = repayment.__get__(self)
 
         rules = OrderedDict()
         rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
@@ -210,7 +210,7 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         """
         self.spread = spread
         self.index_rate_provider = index_rate_provider
-        self.repayment_amount = repayment
+        self.repayment_amount = repayment.__get__(self)
 
         rules = OrderedDict()
         rules[BOP_PRINCIPAL] = bop_principal(initial_principal)

@@ -1,4 +1,4 @@
-from cred import FixedRateBorrowing, thirty360
+from cred import FixedRateBorrowing, thirty360, open_repayment
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -9,7 +9,8 @@ import pytest
 
 @pytest.fixture
 def fixed_io_borrowing():
-    borrowing = FixedRateBorrowing(datetime(2020,1,1), datetime(2020,7,1), relativedelta(months=1), 0.05, -100, day_count=thirty360)
+    borrowing = FixedRateBorrowing(datetime(2020,1,1), datetime(2020,7,1), relativedelta(months=1), 0.05, -100,
+                                   repayment=open_repayment, day_count=thirty360)
     return borrowing
 
 @pytest.fixture
