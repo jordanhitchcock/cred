@@ -175,22 +175,6 @@ def interest_pmt(yearfrac_method=actual360, bop_principal_attr=BOP_PRINCIPAL, in
     return interest
 
 
-def index_rate(index_provider):
-    """
-    Factory for index rate Period rules for floating rate Periods.
-
-    :param index_provider: Object that returns the index rate in response to `obj.rate(period)`
-    :type index_provider: object
-    :return: Returns a function to be used as a Period rule for the index rate
-    """
-    def index_rate_func(period):
-        rate = index_provider.rate(period.start_date)
-
-        return rate
-
-    return index_rate_func
-
-
 def floating_interest_rate(spread, index_rate_attr=INDEX_RATE):
     """
     Factory for floating interest rate (spread plus index rate) Period rules.

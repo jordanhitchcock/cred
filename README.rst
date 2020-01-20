@@ -14,7 +14,7 @@ The **PeriodicBorrowing** subclasses (specifically, **FixedRateBorrowing** and *
 Examples
 =======================
 
-**FloatingRateBorrowings** require an index rate provider object that returns the period interest when ``obj.rate(datetime)`` is called.
+**FloatingRateBorrowings** require an index rate provider function that takes a datetime argument.
 
 In this example, random numbers around 1.5% are returned for demonstration purposes.
 
@@ -25,14 +25,13 @@ In this example, random numbers around 1.5% are returned for demonstration purpo
 
     from cred import FloatingRateBorrowing, open_repayment
 
-    class IP:
-        def rate(self, dt):
-            return	np.random.lognormal(0.015, 0.001) - 1
+    def rate(dt):
+        return	np.random.lognormal(0.015, 0.001) - 1
 
     floating_borrowing = FloatingRateBorrowing(start_date=datetime(2020, 1, 1),
                                                end_date=datetime(2021, 1, 1),
                                                spread=0.03,
-                                               index_rate_provider=IP(),
+                                               index_rate_provider=rate,
                                                initial_principal=100)
     floating_borrowing.schedule()
 

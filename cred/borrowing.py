@@ -5,7 +5,7 @@ from pandas import DataFrame, Series
 
 from cred.businessdays import unadjusted_schedule
 from cred.interest_rate import actual360, thirty360
-from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, index_rate, floating_interest_rate
+from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, floating_interest_rate
 from cred.period import START_DATE, END_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
 
 
@@ -203,8 +203,8 @@ class FloatingRateBorrowing(PeriodicBorrowing):
     def __init__(self, start_date, end_date, spread, index_rate_provider, initial_principal,
                  frequency=relativedelta(months=1), repayment=open_repayment, **kwargs):
         """
-        Borrowing subclass for floating rate borrowings. The index_rate_provider should be an object that provides the
-        applicable rate when obj.rate(datetime) is called.
+        Borrowing subclass for floating rate borrowings. The index_rate_provider should be a function that takes one
+        datetime argument and returns a the appropriate index rate.
 
         :param start_date: Borrowing start date
         :type start_date: datetime
@@ -212,8 +212,8 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         :type end_date: datetime
         :param spread: Borrowing interest rate spread
         :type spread: float
-        :param index_rate_provider: Object that provides index rates when obj.rate(datetime) is called
-        :type index_rate_provider: object
+        :param index_rate_provider: function that takes a datetime as the only argument and returns the index rate
+        :type index_rate_provider: function
         :param initial_principal: Initial principal balance
         :type initial_principal: float, int
         :param frequency: Period frequency, defaults to monthly
@@ -227,7 +227,7 @@ class FloatingRateBorrowing(PeriodicBorrowing):
 
         rules = OrderedDict()
         rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
-        rules[INDEX_RATE] = index_rate(self.index_rate_provider)
+        rules[INDEX_RATE] = self.index_rate_provider
         rules[INTEREST_RATE] = floating_interest_rate(self.spread)
         rules[INTEREST_PAYMENT] = interest_pmt(kwargs.get('day_count', actual360))
         rules[PRINCIPAL_PAYMENT] = interest_only(end_date)
