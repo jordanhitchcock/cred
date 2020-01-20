@@ -64,7 +64,7 @@ This allows users to prepare rates more efficiently. For example, fetch forward 
 
 The additional convenience options in the block below (e.g. ``repayment``, ``frequency``, ``day_count``) can be used for **FloatingRateBorrowings** in the same manner.
 
-The ``percentage_repayment`` function builds a function for calculating repayment costs based on the dates and step-downs. The default is open repayment.
+The ``percent_of_principal`` function builds a function for calculating repayment costs based on the dates and step-downs. The default is open repayment.
 
 Default ``frequency`` is monthly, and default ``day_count`` is actual/360.
 
@@ -72,10 +72,10 @@ Default ``frequency`` is monthly, and default ``day_count`` is actual/360.
 
     from dateutil.relativedelta import relativedelta
 
-    from cred import FixedRateBorrowing, percentage_repayment, thirty360
+    from cred import FixedRateBorrowing, percent_of_principal, thirty360
 
-    step_down = percentage_repayment(pd.date_range('2020-08-1', '2020-12-01', freq='MS'),
-                                      [0.05, 0.04, 0.03, 0.02, 0.01])
+    step_down = percentage_of_principal(pd.date_range('2020-08-1', '2020-12-01', freq='MS'),
+                                                      [0.05, 0.04, 0.03, 0.02, 0.01])
 
     fixed_borrowing = FixedRateBorrowing(start_date=datetime(2020, 1, 1),
                                    end_date=datetime(2021, 1, 1),

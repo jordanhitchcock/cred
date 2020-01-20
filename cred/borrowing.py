@@ -13,7 +13,7 @@ def open_repayment(borrowing, date):
     return borrowing.outstanding_principal(date)
 
 
-def percentage_repayment(dates, percentages):
+def percent_of_principal(dates, percentages):
     """ Return outstanding principal plus the given percentage. Ending stubs will default to open repayment."""
     thresholds = Series(percentages, index=dates)
     thresholds.sort_index(ascending=True)
@@ -27,6 +27,39 @@ def percentage_repayment(dates, percentages):
         i = thresholds.index.get_loc(date, method='bfill')
         return outstanding_balance * (1 + thresholds[i])
     return repayment
+
+
+def yield_maintenance(rate_provider, wal=False, spread=0, day_count_method=actual360):
+    """
+    Yield maintenance function factory.
+    :param rate_provider: Function that takes two datetime and returns the discount rate
+    :type rate_provider: function
+    :param wal: True if the discount rate should be based on remaining weight average life, False if it should be calculated on remaining term (default)
+    :type wal: bool
+    :param spread: Spread to add to the discount rate
+    :type spread: float
+    :param day_count_method: Function for calculating year fractions for discount factors, default is actual / 360
+    :type day_count_method: function
+    :return: function
+    """
+    def pv(borrowing, exit_date):
+        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=True, attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
+
+        remaining_pmt_dates = remaining_cf.pop(END_DATE)
+        remaining_cf = Series(remaining_cf.sum(axis=1).values, index=remaining_pmt_dates)
+        if wal:
+            remaining_days = [(dt - exit_date).days for dt in remaining_pmt_dates]
+            remaining_days = sum(remaining_days) / len(remaining_days)
+        else:
+            remaining_days = (remaining_pmt_dates.iloc[-1] - exit_date).days
+
+        discount_rate = rate_provider(exit_date, exit_date + relativedelta(days=remaining_days)) + spread
+        year_fracs = [day_count_method(exit_date, dt) for dt in remaining_pmt_dates]
+        discount_factors = [(1 / ((1 + discount_rate) ** yf)) for yf in year_fracs]
+
+        return sum([amt * df for amt, df in zip(remaining_cf, discount_factors)])
+
+    return pv
 
 
 class Borrowing:
@@ -69,14 +102,18 @@ class Borrowing:
         schedule = self.schedule()
 
         if start_date is not None:
-            if end_date is not None:
-                schedule = schedule[schedule[START_DATE] >= start_date]
-                schedule = schedule[schedule[END_DATE] <= end_date]
-            else:
-                schedule = schedule[schedule[START_DATE] == start_date]
-        elif end_date is not None:
-            schedule = schedule[schedule[END_DATE] == end_date]
-
+            schedule = schedule[schedule[START_DATE] >= start_date]
+        if end_date is not None:
+            schedule = schedule[schedule[END_DATE] <= end_date]
+        # if start_date is not None:
+        #     if end_date is not None:
+        #         schedule = schedule[schedule[START_DATE] >= start_date]
+        #         schedule = schedule[schedule[END_DATE] <= end_date]
+        #     else:
+        #         schedule = schedule[schedule[START_DATE] == start_date]
+        # elif end_date is not None:
+        #     schedule = schedule[schedule[END_DATE] == end_date]
+        #
         return schedule[attr_names]
 
 
@@ -157,6 +194,14 @@ class PeriodicBorrowing(Borrowing):
 
         i = schedule.index.get_loc(date, method='ffill')
         return schedule[EOP_PRINCIPAL][i]
+
+    def remaining_cash_flow(self, date, include_date=True, attrs=[INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
+        """ Return remaining cash flows through borrowing end date, optionally excluding any cash flows on date of evaluation."""
+        schedule = self.schedule()
+        if include_date:
+            return schedule.loc[schedule[END_DATE] >= date, attrs]
+        else:
+            return schedule.loc[schedule[END_DATE] > date, attrs]
 
 
 class FixedRateBorrowing(PeriodicBorrowing):
