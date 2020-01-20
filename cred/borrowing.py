@@ -8,11 +8,9 @@ from cred.interest_rate import actual360, thirty360
 from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, index_rate, floating_interest_rate
 from cred.period import START_DATE, END_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
 
-# TODO: Handle repayment dates in the middle of a period
-# PeriodicBorrowing repayment functions factories
-# return 0 if exit date is maturity
+
 def open_repayment(borrowing, date):
-    return borrowing.scheduled_cash_flow([EOP_PRINCIPAL], end_date=date).iat[0, 0]
+    return borrowing.outstanding_principal(date)
 
 
 def percentage_repayment(dates, percentages):
@@ -23,7 +21,7 @@ def percentage_repayment(dates, percentages):
     def repayment(borrowing, date):
         outstanding_balance = open_repayment(borrowing, date)
 
-        if date > borrowing.end_date:
+        if date > max(dates):
             return outstanding_balance
 
         i = thresholds.index.get_loc(date, method='bfill')
@@ -146,6 +144,19 @@ class PeriodicBorrowing(Borrowing):
         pmts = self.scheduled_cash_flow(pmt_attrs, start_date=self.start_date, end_date=exit_date).sum(axis=1)
         repayment_amt = self.repayment_amount(exit_date)
         return Series([-self.initial_principal] + pmts.to_list() + [repayment_amt])
+
+    def outstanding_principal(self, date):
+        """ Return the outstanding principal balance for a given date."""
+        if (date < self.start_date) or (date > self.end_date):
+            raise IndexError('Date is outside borrowing dates.')
+
+        if date == self.start_date:
+            return self.initial_principal
+
+        schedule = self.schedule().set_index(END_DATE)
+
+        i = schedule.index.get_loc(date, method='ffill')
+        return schedule[EOP_PRINCIPAL][i]
 
 
 class FixedRateBorrowing(PeriodicBorrowing):
