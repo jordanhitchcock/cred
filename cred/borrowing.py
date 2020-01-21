@@ -62,6 +62,31 @@ def yield_maintenance(rate_provider, wal=False, spread=0, day_count_method=actua
     return pv
 
 
+def defeasance(rate_provider, day_count=thirty360):
+    """
+    Factory for defeasance repayment functions.
+    :param rate_provider: Function that takes two datetime and returns a float for the discount rate
+    :type rate_provider: function
+    :param day_count: Day count function for building discount factors, default is 30/360
+    :type day_count: function
+    :return: function
+    """
+    def pv(borrowing, exit_date):
+        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=True,
+                                                     attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
+
+        remaining_pmt_dates = remaining_cf.pop(END_DATE)
+        remaining_cf = Series(remaining_cf.sum(axis=1).values, index=remaining_pmt_dates)
+
+        discout_factors = []
+        for dt in remaining_pmt_dates:
+            discout_factors.append(1/(1 + rate_provider(exit_date, dt)) ** day_count(exit_date, dt))
+
+        return sum([amt * df for amt, df in zip(remaining_cf, discout_factors)])
+
+    return pv
+
+
 class Borrowing:
 
     def __init__(self, dates, period_rules):
