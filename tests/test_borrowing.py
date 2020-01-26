@@ -9,8 +9,13 @@ import pytest
 
 @pytest.fixture
 def fixed_io_borrowing():
-    borrowing = FixedRateBorrowing(datetime(2020,1,1), datetime(2020,7,1), relativedelta(months=1), 0.05, -100,
-                                   repayment=open_repayment, day_count=thirty360)
+    borrowing = FixedRateBorrowing(start_date=datetime(2020,1,1),
+                                   end_date=datetime(2020,7,1),
+                                   frequency=relativedelta(months=1),
+                                   coupon=0.05,
+                                   initial_principal=-100,
+                                   repayment=open_repayment,
+                                   day_count=thirty360)
     return borrowing
 
 @pytest.fixture
