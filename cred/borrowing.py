@@ -130,15 +130,7 @@ class Borrowing:
             schedule = schedule[schedule[START_DATE] >= start_date]
         if end_date is not None:
             schedule = schedule[schedule[END_DATE] <= end_date]
-        # if start_date is not None:
-        #     if end_date is not None:
-        #         schedule = schedule[schedule[START_DATE] >= start_date]
-        #         schedule = schedule[schedule[END_DATE] <= end_date]
-        #     else:
-        #         schedule = schedule[schedule[START_DATE] == start_date]
-        # elif end_date is not None:
-        #     schedule = schedule[schedule[END_DATE] == end_date]
-        #
+
         return schedule[attr_names]
 
 
@@ -151,15 +143,15 @@ class PeriodicBorrowing(Borrowing):
         :param initial_principal: Initial principal
         :type initial_principal: int, float
         :param start_date: Borrowing start date
-        :type start_date: datetime
+        :type start_date: datetime.datetime
         :param frequency: Interest period frequency
-        :type frequency: dateutil.relativedelta
+        :type frequency: relativedelta
         :param first_regular_date: Starting date of first regular period, or None if the same as start_date
         :type first_regular_date: datetime, None
         :param periods: Number of periods, or None if end_date is used
         :type periods: int, None
         :param end_date: Maturity date, or None if periods is used
-        :type end_date: datetime, None
+        :type end_date: datetime.datetime, None
         :param period_rules: OrderedDict of rules to create Period schedules
         :type period_rules: OrderedDict({str: func})
         """
@@ -197,7 +189,7 @@ class PeriodicBorrowing(Borrowing):
         """
         Return net cash flows through exit_date, including initial principal and loan repayment costs.
         :param exit_date: Date of repayment
-        :type exit_date: datetime
+        :type exit_date: datetime.datetime
         :param pmt_attrs: List of schedule series to sum as periodic cash flows, default is interest and amortization.
         :type pmt_attrs: list
         :return: Net cash flows
@@ -237,9 +229,9 @@ class FixedRateBorrowing(PeriodicBorrowing):
         Borrowing subclass for fixed rate debt.
 
         :param start_date: Borrowing start date
-        :type start_date: datetime
+        :type start_date: datetime.datetime
         :param end_date: Borrowing end date
-        :type end_date: datetime
+        :type end_date: datetime.datetime
         :param coupon: Coupon rate
         :type coupon: float
         :param initial_principal: Initial principal amount
@@ -247,7 +239,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
         :param amort: Amortization rule or None (default), if None then interest only.
         :type amort: func, None
         :param frequency: Period frequency, defaults to monthly
-        :type frequency: dateutil.relativedelta
+        :type frequency: relativedelta
         :param repayment: Repayment method
         :type repayment: func
         """
@@ -277,9 +269,9 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         datetime argument and returns a the appropriate index rate.
 
         :param start_date: Borrowing start date
-        :type start_date: datetime
+        :type start_date: datetime.datetime
         :param end_date: Borrowing end date
-        :type end_date: datetime
+        :type end_date: datetime.datetime
         :param spread: Borrowing interest rate spread
         :type spread: float
         :param index_rate_provider: function that takes a datetime as the only argument and returns the index rate
@@ -287,7 +279,7 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         :param initial_principal: Initial principal balance
         :type initial_principal: float, int
         :param frequency: Period frequency, defaults to monthly
-        :type frequency: dateutil.relativedelta
+        :type frequency: relativedelta
         :param repayment: Repayment method, default is open
         :type repayment: func
         """
