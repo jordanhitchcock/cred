@@ -1,4 +1,5 @@
 from pandas.tseries.holiday import *
+import calendar
 
 
 class FederalReserveHolidays(AbstractHolidayCalendar):
@@ -34,6 +35,12 @@ class LondonBankHolidays(AbstractHolidayCalendar):
 def is_observed_holiday(dt, calendar):
     """ Return True if dt is a holiday in calendar."""
     return dt in calendar.holidays(start=dt, end=dt, return_name=False)
+
+
+def is_month_end(dt):
+    """ Return True if dt is the last day of the month."""
+    month, last_day = calendar.monthrange(dt.year, dt.month)
+    return dt.day == last_day
 
 
 def previous_business_day(dt, calendar):
