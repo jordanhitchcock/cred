@@ -19,21 +19,27 @@ INDEX_RATE = 'index_rate'
 
 class Period:
 
-    def __init__(self, id, start_date, end_date, previous_period, rules={}):  # Rules as collections.OrderedDict
-        self.id = id
+    def __init__(self, period_id, start_date, end_date, previous_period, rules=None):
+        """
+        Create a Period.
+        :param period_id: Period id
+        :param start_date: Period start date
+        :param end_date: Period end date
+        :param previous_period: Previous period, or None if the first period
+        :param rules: List of (str, function) rules to build the period schedule
+        """
+        self.id = period_id
         self.start_date = start_date
         self.end_date = end_date
         self.previous_period = previous_period
-        self.schedule = {}
+        self.schedule = {START_DATE: self.start_date, END_DATE: self.end_date}
 
-        self.schedule[START_DATE] = self.start_date
-        self.schedule[END_DATE] = self.end_date
+        if rules is not None:
+            for name, func in rules:
+                schedule_value = func(self)
 
-        for name, func in rules.items():
-            schedule_value = func(self)
-
-            self.__setattr__(name, schedule_value)
-            self.schedule[name] = schedule_value
+                self.__setattr__(name, schedule_value)
+                self.schedule[name] = schedule_value
 
 
 # Date functions

@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from dateutil.relativedelta import relativedelta
 
 from pandas import DataFrame, Series
@@ -95,19 +94,19 @@ class Borrowing:
 
         :param dates: List of (start date, end date) for periods
         :type dates: list
-        :param period_rules: OrderedDict of name, function rules passed to Period
-        :type period_rules: OrderedDict
+        :param period_rules: List of (str, function) rules passed to Period
+        :type period_rules: list
         """
         self.dates = dates
         self.period_rules = period_rules
 
     def schedule(self):
-        """ Build Periods and returns a DataFrame of aggregated Period.schedule."""
+        """ Build Periods and return a DataFrame of aggregated Period.schedule."""
         i = 1
         periods = []
 
         for start, end in self.dates:
-            if len(periods) == 0:
+            if not periods:
                 previous_period = None
             else:
                 previous_period = periods[-1]
@@ -152,8 +151,8 @@ class PeriodicBorrowing(Borrowing):
         :type periods: int, None
         :param end_date: Maturity date, or None if periods is used
         :type end_date: datetime.datetime, None
-        :param period_rules: OrderedDict of rules to create Period schedules
-        :type period_rules: OrderedDict({str: func})
+        :param period_rules: List of (str_name, function) rules to create Period schedules
+        :type period_rules: list
         """
         if periods is None and end_date is None:
             raise Exception('Must provide either the number of periods or the end date.')
@@ -247,15 +246,15 @@ class FixedRateBorrowing(PeriodicBorrowing):
         self.initial_principal = initial_principal
         self.repayment_amount = repayment.__get__(self)
 
-        rules = OrderedDict()
-        rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
-        rules[INTEREST_RATE] = fixed_interest_rate(coupon)
-        rules[INTEREST_PAYMENT] = interest_pmt(kwargs.get('day_count', actual360))
+        rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
+                 (INTEREST_RATE, fixed_interest_rate(coupon)),
+                 (INTEREST_PAYMENT, interest_pmt(kwargs.get('day_count', actual360)))]
+
         if amort is None:
-            rules[PRINCIPAL_PAYMENT] = interest_only(end_date)
+            rules.append((PRINCIPAL_PAYMENT, interest_only(end_date)))
         else:
-            rules[PRINCIPAL_PAYMENT] = amort
-        rules[EOP_PRINCIPAL] = eop_principal()
+            rules.append((PRINCIPAL_PAYMENT, amort))
+        rules.append((EOP_PRINCIPAL, eop_principal()))
 
         super().__init__(initial_principal, start_date, frequency, end_date=end_date, period_rules=rules)
 
@@ -287,13 +286,12 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         self.index_rate_provider = index_rate_provider
         self.repayment_amount = repayment.__get__(self)
 
-        rules = OrderedDict()
-        rules[BOP_PRINCIPAL] = bop_principal(initial_principal)
-        rules[INDEX_RATE] = self.index_rate_provider
-        rules[INTEREST_RATE] = floating_interest_rate(self.spread)
-        rules[INTEREST_PAYMENT] = interest_pmt(kwargs.get('day_count', actual360))
-        rules[PRINCIPAL_PAYMENT] = interest_only(end_date)
-        rules[EOP_PRINCIPAL] = eop_principal()
+        rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
+                 (INDEX_RATE, self.index_rate_provider),
+                 (INTEREST_RATE, floating_interest_rate(self.spread)),
+                 (INTEREST_PAYMENT, interest_pmt(kwargs.get('day_count', actual360))),
+                 (PRINCIPAL_PAYMENT, interest_only(end_date)),
+                 (EOP_PRINCIPAL, eop_principal())]
 
         super().__init__(initial_principal, start_date, frequency, end_date=end_date, period_rules=rules)
 
