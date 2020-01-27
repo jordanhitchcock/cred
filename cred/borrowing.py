@@ -188,7 +188,7 @@ class PeriodicBorrowing(Borrowing):
         """ Calculate loan repayment costs for date. Should be implemented by subclasses."""
         raise NotImplementedError('PeriodicBorrowing.repayment_amount not implemented in {} subclass.'.format(self.__class__))
 
-    def net_cash_flows(self, exit_date, pmt_attrs=[INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
+    def net_cash_flows(self, exit_date, pmt_attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
         """
         Return net cash flows through exit_date, including initial principal and loan repayment costs.
         :param exit_date: Date of repayment
@@ -198,9 +198,15 @@ class PeriodicBorrowing(Borrowing):
         :return: Net cash flows
         :rtype: pandas.Series
         """
-        pmts = self.scheduled_cash_flow(pmt_attrs, start_date=self.start_date, end_date=exit_date).sum(axis=1)
+        pmts = self.scheduled_cash_flow(pmt_attrs, start_date=self.start_date, end_date=exit_date)
+        pmts = pmts.set_index(END_DATE)
+        pmts = pmts.sum(axis=1)
+
         repayment_amt = self.repayment_amount(exit_date)
-        return Series([-self.initial_principal] + pmts.to_list() + [repayment_amt])
+        pmts[exit_date] = pmts.get(exit_date, 0) + repayment_amt
+
+        pmts[self.start_date] = pmts.get(self.start_date, 0) - self.initial_principal
+        return pmts.sort_index()
 
     def outstanding_principal(self, date):
         """ Return the outstanding principal balance for a given date."""
