@@ -71,11 +71,12 @@ Default ``frequency`` is monthly, and default ``day_count`` is actual/360.
 .. code-block::
 
     from dateutil.relativedelta import relativedelta
+    import pandas as pd
 
     from cred import FixedRateBorrowing, percent_of_principal, thirty360
 
-    step_down = percentage_of_principal(pd.date_range('2020-08-1', '2020-12-01', freq='MS'),
-                                                      [0.05, 0.04, 0.03, 0.02, 0.01])
+    step_down = percent_of_principal(pd.date_range('2020-08-1', '2020-12-01', freq='MS'),
+                                                    [0.05, 0.04, 0.03, 0.02, 0.01])
 
     fixed_borrowing = FixedRateBorrowing(start_date=datetime(2020, 1, 1),
                                    end_date=datetime(2021, 1, 1),
@@ -109,8 +110,7 @@ For example, to calculate the effective borrowing cost if the previous fixed bor
 
 .. code-block::
 
-    >>> import numpy as np
     >>> cash_flows = fixed_borrowing.net_cash_flows(datetime(2020, 10, 1))
     >>> np.irr(cash_flows) * 4
-    0.0670659774603255
+    0.08912187274194405
 
