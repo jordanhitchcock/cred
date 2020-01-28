@@ -91,7 +91,7 @@ def defeasance(rate_provider, day_count=thirty360):
 
 class Borrowing:
 
-    def __init__(self, dates, period_rules):
+    def __init__(self, dates, period_rules=None):
         """
         Base level Borrowing class. Custom Borrowing classes should subclass Borrowing.
 
@@ -101,7 +101,10 @@ class Borrowing:
         :type period_rules: list
         """
         self.dates = dates
-        self.period_rules = period_rules
+        if period_rules is None:
+            self.period_rules = []
+        else:
+            self.period_rules = period_rules
 
     def schedule(self):
         """ Build Periods and return a DataFrame of aggregated Period.schedule."""
@@ -180,7 +183,7 @@ class PeriodicBorrowing(Borrowing):
         period_dates = []
         if self.start_date is not self.first_regular_date:
             period_dates.append((self.start_date, self.first_regular_date))
-        period_dates = period_dates + unadjusted_schedule(self.first_regular_date, end_date, frequency)
+        period_dates = period_dates + unadjusted_schedule(self.first_regular_date, self.end_date, frequency)
 
         super().__init__(period_dates, period_rules=self.period_rules)
 
@@ -233,7 +236,8 @@ class PeriodicBorrowing(Borrowing):
 class FixedRateBorrowing(PeriodicBorrowing):
 
     def __init__(self, start_date, coupon, initial_principal, end_date=None, periods=None, first_regular_date=None,
-                 amort=None, frequency=relativedelta(months=1), repayment=None, day_count=actual360, period_rules=None):
+                 amort=None, frequency=relativedelta(months=1), repayment=None, day_count=actual360,
+                 additional_period_rules=None):
         """
         Borrowing subclass for fixed rate debt.
 
@@ -257,33 +261,35 @@ class FixedRateBorrowing(PeriodicBorrowing):
         :type repayment: func
         :param day_count: Day count for calculating interest
         :type day_count: function
-        :param period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
-        :type period_rules: iterable
+        :param additional_period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
+        :type additional_period_rules: iterable
         """
+        super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
+                         periods=periods, end_date=end_date)
+
         self.coupon = coupon
         self.initial_principal = initial_principal
         self.repayment_amount = repayment.__get__(self)
 
-        rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
-                 (INTEREST_RATE, fixed_interest_rate(coupon)),
-                 (INTEREST_PAYMENT, interest_pmt(day_count))]
+        period_rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
+                        (INTEREST_RATE, fixed_interest_rate(coupon)),
+                        (INTEREST_PAYMENT, interest_pmt(day_count))]
 
         if amort is None:
-            rules.append((PRINCIPAL_PAYMENT, interest_only(end_date)))
+            period_rules.append((PRINCIPAL_PAYMENT, interest_only(self.end_date)))
         else:
-            rules.append((PRINCIPAL_PAYMENT, amort))
-        rules.append((EOP_PRINCIPAL, eop_principal()))
+            period_rules.append((PRINCIPAL_PAYMENT, amort))
+        period_rules.append((EOP_PRINCIPAL, eop_principal()))
 
-        if period_rules is not None:
-            for i, rule in period_rules:
-                rules.insert(i, rules)
+        if additional_period_rules is not None:
+            for i, rule in additional_period_rules:
+                period_rules.insert(i, rule)
 
-        super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
-                         end_date=end_date, periods=periods, period_rules=rules)
+        self.period_rules = period_rules
 
     @classmethod
-    def Monthly_Amortizing_Loan(cls, start_date, principal, coupon, repayment, end_date=None, periods=None,
-                                first_regular_date=None, amort_periods=360, months_io=0, day_count=actual360):
+    def monthly_amortizing_loan(cls, start_date, principal, coupon, end_date=None, periods=None, first_regular_date=None,
+                                amort_periods=360, months_io=0, repayment=open_repayment, day_count=actual360):
         """
         Convenience method for creating monthly fixed rate amortizing Borrowings. If the first regular payment date is
         on month end, assumings month end frequency.
@@ -324,14 +330,14 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         return cls(start_date=start_date, coupon=coupon, initial_principal=principal, end_date=end_date,
                    first_regular_date=first_regular_date, amort=amort_func, frequency=frequency, repayment=repayment,
-                   day_count=day_count, period_rules=None)
+                   day_count=day_count)
 
 
 class FloatingRateBorrowing(PeriodicBorrowing):
 
     def __init__(self, start_date, spread, index_rate_provider, initial_principal, end_date=None, periods=None,
                  first_regular_date=None, frequency=relativedelta(months=1), repayment=open_repayment,
-                 day_count=actual360, period_rules=None):
+                 day_count=actual360, additional_period_rules=None):
         """
         Borrowing subclass for floating rate borrowings. The index_rate_provider should be a function that takes one
         datetime argument and returns a the appropriate index rate.
@@ -356,24 +362,25 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         :type repayment: func
         :param day_count: Day count method for calculating interest
         :type day_count: function
-        :param period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
-        :type period_rules: iterable
+        :param additional_period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
+        :type additional_period_rules: iterable
         """
+        super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
+                         periods=periods, end_date=end_date)
+
         self.spread = spread
         self.index_rate_provider = index_rate_provider
         self.repayment_amount = repayment.__get__(self)
 
-        rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
-                 (INDEX_RATE, self.index_rate_provider),
-                 (INTEREST_RATE, floating_interest_rate(self.spread)),
-                 (INTEREST_PAYMENT, interest_pmt(day_count)),
-                 (PRINCIPAL_PAYMENT, interest_only(end_date)),
-                 (EOP_PRINCIPAL, eop_principal())]
+        period_rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
+                        (INDEX_RATE, self.index_rate_provider),
+                        (INTEREST_RATE, floating_interest_rate(self.spread)),
+                        (INTEREST_PAYMENT, interest_pmt(day_count)),
+                        (PRINCIPAL_PAYMENT, interest_only(self.end_date)),
+                        (EOP_PRINCIPAL, eop_principal())]
 
-        if period_rules is not None:
-            for i, rule in period_rules:
-                rules.insert(i, rules)
+        if additional_period_rules is not None:
+            for i, rule in additional_period_rules:
+                period_rules.insert(i, rule)
 
-        super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
-                         end_date=end_date, periods=periods, period_rules=rules)
-
+        self.period_rules = period_rules
