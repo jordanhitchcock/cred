@@ -45,7 +45,7 @@ def yield_maintenance(rate_provider, wal=False, spread=0, day_count_method=actua
     :return: function
     """
     def pv(borrowing, exit_date):
-        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=True, attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
+        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=False, attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
 
         remaining_pmt_dates = remaining_cf.pop(END_DATE)
         remaining_cf = Series(remaining_cf.sum(axis=1).values, index=remaining_pmt_dates)
@@ -74,7 +74,7 @@ def defeasance(rate_provider, day_count=thirty360):
     :return: function
     """
     def pv(borrowing, exit_date):
-        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=True,
+        remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=False,
                                                      attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
 
         remaining_pmt_dates = remaining_cf.pop(END_DATE)
@@ -187,9 +187,11 @@ class PeriodicBorrowing(Borrowing):
 
         super().__init__(period_dates, period_rules=self.period_rules)
 
-    def repayment_amount(self, date):
-        """ Calculate loan repayment costs for date. Should be implemented by subclasses."""
-        raise NotImplementedError('PeriodicBorrowing.repayment_amount not implemented in {} subclass.'.format(self.__class__))
+    def repayment_cost(self, date):
+        """ Calculate loan repayment costs for date. Should be implemented by subclasses.
+        Implementations should not include regularly scheduled principal and interest on the repayment date."""
+        raise NotImplementedError('PeriodicBorrowing.repayment_cost not implemented in {} subclass.'
+                                  .format(self.__class__))
 
     def net_cash_flows(self, exit_date, pmt_attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
         """
@@ -205,14 +207,14 @@ class PeriodicBorrowing(Borrowing):
         pmts = pmts.set_index(END_DATE)
         pmts = pmts.sum(axis=1)
 
-        repayment_amt = self.repayment_amount(exit_date)
+        repayment_amt = self.repayment_cost(exit_date)
         pmts[exit_date] = pmts.get(exit_date, 0) + repayment_amt
 
         pmts[self.start_date] = pmts.get(self.start_date, 0) - self.initial_principal
         return pmts.sort_index()
 
     def outstanding_principal(self, date):
-        """ Return the outstanding principal balance for a given date."""
+        """ Return the scheduled outstanding principal balance for a given date."""
         if (date < self.start_date) or (date > self.end_date):
             raise IndexError('Date is outside borrowing dates.')
 
@@ -224,7 +226,7 @@ class PeriodicBorrowing(Borrowing):
         i = schedule.index.get_loc(date, method='ffill')
         return schedule[EOP_PRINCIPAL][i]
 
-    def remaining_cash_flow(self, date, include_date=True, attrs=[INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
+    def remaining_cash_flow(self, date, include_date=False, attrs=[INTEREST_PAYMENT, PRINCIPAL_PAYMENT]):
         """ Return remaining cash flows through borrowing end date, optionally excluding any cash flows on date of evaluation."""
         schedule = self.schedule()
         if include_date:
@@ -269,7 +271,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         self.coupon = coupon
         self.initial_principal = initial_principal
-        self.repayment_amount = repayment.__get__(self)
+        self.repayment_cost = repayment.__get__(self)
 
         period_rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
                         (INTEREST_RATE, fixed_interest_rate(coupon)),
@@ -370,7 +372,7 @@ class FloatingRateBorrowing(PeriodicBorrowing):
 
         self.spread = spread
         self.index_rate_provider = index_rate_provider
-        self.repayment_amount = repayment.__get__(self)
+        self.repayment_cost = repayment.__get__(self)
 
         period_rules = [(BOP_PRINCIPAL, bop_principal(initial_principal)),
                         (INDEX_RATE, self.index_rate_provider),
@@ -384,3 +386,4 @@ class FloatingRateBorrowing(PeriodicBorrowing):
                 period_rules.insert(i, rule)
 
         self.period_rules = period_rules
+

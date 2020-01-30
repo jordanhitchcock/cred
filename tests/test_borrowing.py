@@ -1,168 +1,58 @@
-from cred import FixedRateBorrowing, thirty360, open_repayment
+from cred import FixedRateBorrowing, thirty360, open_repayment, defeasance, actual360
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 import pandas as pd
 import pytest
 
-# TODO clean up testing for Borrowing
 
 @pytest.fixture
-def fixed_io_borrowing():
-    borrowing = FixedRateBorrowing(start_date=datetime(2020,1,1),
-                                   end_date=datetime(2020,7,1),
-                                   frequency=relativedelta(months=1),
-                                   coupon=0.05,
-                                   initial_principal=-100,
-                                   repayment=open_repayment,
-                                   day_count=thirty360)
-    return borrowing
-
-@pytest.fixture
-def floating_io_borrowing():
-    borrowing = AbstractBorrowing()
+def fixed_constant_payment_amort_borrowing():
+    borrowing = FixedRateBorrowing.monthly_amortizing_loan(start_date=datetime(2015, 1, 1),
+                                                           principal=1_000_000,
+                                                           coupon=0.05,
+                                                           periods=120,
+                                                           repayment=defeasance(lambda dt1, dt2: 0.02))
     return borrowing
 
 
-@pytest.fixture
-def fixed_constant_pmt_borrowing():
-    borrowing = AbstractBorrowing()
-    return borrowing
+def test_fixed_constant_payment_amort_schedule(fixed_constant_payment_amort_borrowing):
+    expected = pd.read_csv('./tests/data/fixed_constant_payment_amort_borrowing.csv')
+    expected['start_date'] = pd.to_datetime(expected['start_date'])
+    expected['end_date'] = pd.to_datetime(expected['end_date'])
+    pd.testing.assert_frame_equal(expected, fixed_constant_payment_amort_borrowing.schedule())
 
 
-@pytest.fixture
-def fixed_custom_amort_borrowing():
-    borrowing = AbstractBorrowing()
-    return borrowing
+def test_fixed_constant_payment_amort_defeasance(fixed_constant_payment_amort_borrowing):
+    actual20210801 = fixed_constant_payment_amort_borrowing.repayment_cost(datetime(2021, 8, 1))
+    assert 981006.562220998 + actual20210801 == pytest.approx(981006.562220998 * 2)
+
+    actual20210817 = fixed_constant_payment_amort_borrowing.repayment_cost(datetime(2021, 8, 17))
+    assert 981870.3426046750 + actual20210817 == pytest.approx(981870.342604675000000 * 2)
+
+    actual20250101 = fixed_constant_payment_amort_borrowing.repayment_cost(datetime(2025, 1, 1))
+    assert 0.0 + actual20250101 == pytest.approx(0.0)
 
 
-@pytest.fixture
-def floating_custom_amort_borrowing():
-    borrowing = AbstractBorrowing()
-    return borrowing
+def test_fixed_constant_payment_amort_net_cash_flow(fixed_constant_payment_amort_borrowing):
+    expected_schedule = pd.read_csv('./tests/data/fixed_constant_payment_amort_borrowing_net_cash_flow.csv',
+                                    index_col=0)
 
+    expected_schedule.index = pd.to_datetime(expected_schedule.index)
+    expected = expected_schedule['2021-08-01'].dropna()
+    expected.name = None
+    actual = fixed_constant_payment_amort_borrowing.net_cash_flows(datetime(2021, 8, 1))
+    pd.testing.assert_series_equal(expected, actual)
 
-@pytest.fixture
-def fixed_custom_accreting_borrowing():
-    borrowing = AbstractBorrowing()
-    return borrowing
+    expected_schedule.index = pd.to_datetime(expected_schedule.index)
+    expected = expected_schedule['2021-08-17'].dropna()
+    expected.name = None
+    actual = fixed_constant_payment_amort_borrowing.net_cash_flows(datetime(2021, 8, 17))
+    pd.testing.assert_series_equal(expected, actual)
 
+    expected_schedule.index = pd.to_datetime(expected_schedule.index)
+    expected = expected_schedule['2025-01-01'].dropna()
+    expected.name = None
+    actual = fixed_constant_payment_amort_borrowing.net_cash_flows(datetime(2025, 1, 1))
+    pd.testing.assert_series_equal(expected, actual)
 
-@pytest.fixture
-def floating_custom_accreting_borrowing():
-    borrowing = AbstractBorrowing()
-    return borrowing
-
-
-def test_fixed_io_schedule(fixed_io_borrowing):
-    actual = fixed_io_borrowing.schedule()
-
-    expected = pd.DataFrame({
-        'start_date': [datetime(2020,1,1), datetime(2020,2,1), datetime(2020,3,1), datetime(2020,4,1), datetime(2020,5,1), datetime(2020,6,1)],
-        'end_date': [datetime(2020, 2, 1), datetime(2020, 3, 1), datetime(2020, 4, 1), datetime(2020, 5, 1), datetime(2020, 6, 1), datetime(2020, 7, 1)],
-        'bop_principal': [-100] * 6,
-        'interest_rate': [0.05] * 6,
-        'interest_payment': [-5 / 12] * 6,
-        'principal_payment': [0] * 5 + [-100],
-        'eop_principal': [-100] * 5 + [0]
-    })
-    pd.testing.assert_frame_equal(actual, expected)
-
-
-def test_floating_io_schedule(floating_io_borrowing):
-    actual = floating_io_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.00] * 6,
-        'index_rate': [0.02] * 3 + [0.03] * 3,
-        'interest_rate': [0.05] * 3 + [0.06] * 3,
-        'interest': [-5.0] * 3 + [-6.0] * 3,
-        'principal': [0] * 5 + [-100],
-        'payment': [-5.0] * 3 + [-6.0] * 2 + [-106.0],
-        'eop_principal': [-100.0] * 5 + [0.0]
-    }
-
-    assert actual == expected
-
-
-def test_fixed_constant_pmt_schedule(fixed_constant_pmt_borrowing):
-    actual = fixed_constant_pmt_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.00, -98.49, -96.90, -95.24, -93.49, -91.66],
-        'coupon': [0.05] * 6,
-        'interest': [-5.00, -4.92, -4.85, -4.76, -4.67, -4.58],
-        'principal': [-1.51, -1.59, -1.66, -1.75, -1.84, -91.65],
-        'payment': [-6.51, -6.51, -6.51, -6.51, -6.51, -96.23],
-        'eop_principal': [-98.49, -96.9, -95.24, -93.49, -91.65, 0.00]
-    }
-
-    assert actual == expected
-
-
-def test_fixed_custom_amort_schedule(fixed_custom_amort_borrowing):
-    actual = fixed_custom_amort_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.00, -99.00, -98.00, -97.00, -96.00, -95.00],
-        'coupon': [0.05] * 6,
-        'interest': [-5.00, -4.95, -4.90, -4.85, -4.80, -4.75],
-        'principal': [-1.00] * 5 + [-95.00],
-        'payment': [-6.00, -5.95, -5.90, -5.85, -5.80, -5.75],
-        'eop_principal': [-99.00, -98.00, -97.00, -96.00, -95.00, 0.00]
-    }
-
-    assert actual == expected
-
-
-def test_floating_custom_amort_schedule(floating_custom_amort_borrowing):
-    actual = floating_custom_amort_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.00, -99.00, -98.00, -97.00, -96.00, -95.00],
-        'index_rate': [0.02] * 3 + [0.03] * 3,
-        'interest_rate': [0.05] * 3 + [0.06] * 3,
-        'interest': [-5.0, -4.95, -4.9, -5.82, -5.76, -5.7],
-        'principal': [-1.00] * 5 + [-95.00],
-        'payment': [-6.0, -5.95, -5.9, -6.82, -6.76, -100.7],
-        'eop_principal': [-99.00, -98.00, -97.00, -96.00, -95.00, 0.00]
-    }
-
-    assert actual == expected
-
-
-def test_fixed_custom_accreting_schedule(fixed_custom_accreting_borrowing):
-    actual = fixed_custom_accreting_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.0, -101.0, -102.0, -103.0, -104.0, -105.0],
-        'coupon': [0.05] * 6,
-        'interest': [-5.0, -5.05, -5.1, -5.15, -5.2, -5.25],
-        'principal': [1.0] * 5 + [-105.0],
-        'payment': [-4.0, -4.05, -4.1, -4.15, -4.2, -110.25],
-        'eop_principal': [-101.0, -102.0, -103.0, -104.0, -105.0, 0.0]
-    }
-
-    assert actual == expected
-
-
-def test_floating_custom_accreting_schedule(floating_custom_accreting_borrowing):
-    actual = floating_custom_accreting_borrowing.schedule()
-
-    expected = {
-        'period': [1, 2, 3, 4, 5, 6],
-        'bop_principal': [-100.00, -101.00, -102.00, -103.00, -104.00, -105.00],
-        'index_rate': [0.02] * 3 + [0.03] * 3,
-        'interest_rate': [0.05] * 3 + [0.06] * 3,
-        'interest': [-5.0, -5.05, -5.1, -6.18, -6.24, -6.3],
-        'principal': [1.00] * 5 + [-105.00],
-        'payment': [-4.0, -4.05, -4.1, -5.18, -5.24, -111.3],
-        'eop_principal': [-101.0, -102.0, -103.0, -104.0, -105.0, 0.00]
-    }
-
-    assert actual == expected

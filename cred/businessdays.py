@@ -1,5 +1,6 @@
-from pandas.tseries.holiday import *
 import calendar
+from dateutil.relativedelta import relativedelta
+from pandas.tseries.holiday import *
 
 
 class FederalReserveHolidays(AbstractHolidayCalendar):
@@ -91,3 +92,22 @@ def unadjusted_schedule(start_date, end_date, frequency):
     return periods
 
 
+class Monthly:
+
+    def __init__(self, months=1):
+        self.months = months
+
+    def __add__(self, other):
+        if calendar.monthrange(other.year, other.month)[1] == other.day:
+            return other + relativedelta(months=self.months + 1, day=1, days=-1)
+        return other + relativedelta(months=self.months)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __mul__(self, other):
+        self.months *= other
+        return self
+
+    def __rmul__(self, other):
+        self.__mul__(other)
