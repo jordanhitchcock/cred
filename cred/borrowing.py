@@ -1,3 +1,4 @@
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from pandas import DataFrame, Series
@@ -64,29 +65,50 @@ def yield_maintenance(rate_provider, wal=False, spread=0, day_count_method=actua
     return pv
 
 
-def defeasance(rate_provider, day_count=thirty360):
+def defeasance(rate_provider, open_date=None, dfz_to_open=False, day_count=thirty360):
     """
     Factory for defeasance repayment functions.
     :param rate_provider: Function that takes two datetime and returns a float for the discount rate
     :type rate_provider: function
+    :param open_date: First day of repayment at par or None if not open prior to maturity
+    :type open_date: datetime, None
+    :param dfz_to_open: Bool indicating whether to defease cash flows to open date or maturity
+    :type dfz_to_open: bool
     :param day_count: Day count function for building discount factors, default is 30/360
     :type day_count: function
     :return: function
     """
-    def pv(borrowing, exit_date):
+    if dfz_to_open and open_date is None:
+        raise Exception('Cannot defease to open date since no open date was provided.')
+
+    def dfz(borrowing, exit_date):
         remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=False,
                                                      attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
+
+        if open_date is not None and exit_date >= open_date:
+            return open_repayment(borrowing, exit_date)
 
         remaining_pmt_dates = remaining_cf.pop(END_DATE)
         remaining_cf = Series(remaining_cf.sum(axis=1).values, index=remaining_pmt_dates)
 
-        discout_factors = []
-        for dt in remaining_pmt_dates:
-            discout_factors.append(1/(1 + rate_provider(exit_date, dt)) ** day_count(exit_date, dt))
+        if dfz_to_open:
+            remaining_cf = remaining_cf[remaining_cf.index <= open_date]
+            remaining_cf[open_date] = remaining_cf.get(open_date, 0) + open_repayment(borrowing, exit_date)
+            remaining_cf.sort_index()
 
-        return sum([amt * df for amt, df in zip(remaining_cf, discout_factors)])
+        discount_factors = []
+        for dt in remaining_cf.index:
+            discount_factors.append(1/(1 + rate_provider(exit_date, dt)) ** day_count(exit_date, dt))
 
-    return pv
+        return sum([amt * df for amt, df in zip(remaining_cf, discount_factors)])
+
+    return dfz
+"""
+Lockout
+Open date
+dfz through open
+ 
+"""
 
 
 class Borrowing:
