@@ -1,6 +1,5 @@
-from cred import FixedRateBorrowing, thirty360, open_repayment, defeasance, actual360
+from cred import FixedRateBorrowing, defeasance
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
 import pandas as pd
 import pytest

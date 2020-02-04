@@ -1,13 +1,8 @@
-from dateutil.relativedelta import relativedelta
-
-
-# TODO: One month offset end of month
-# Absolute is applied before relative
-eom_offset = relativedelta(months=1, day=1, days=-1)
+import calendar
 
 
 def is_month_end(dt):
-    return dt == dt + eom_offset
+    return dt.day == calendar.monthrange(dt.year, dt.month)[1]
 
 
 def actual360(dt1, dt2):
@@ -31,3 +26,31 @@ def thirty360(dt1, dt2):
     days = 360 * (y2 - y1) + 30 * (m2 - m1) + (d2 - d1)
 
     return days / 360
+
+
+def decompounded_periodic_rate(rate, freq):
+    """
+    Return decompounded periodic rate with the number of periods based on freq.
+    :param rate: Annual rate
+    :type rate: float
+    :param freq: dateutil.relativedelta representing a period. Years equals 1 period, months equal 12, days equal 365.
+    :type freq: relativedelta
+    :return: float
+    """
+    yearfrac = freq.years + (freq.months / 12) + (freq.days / 365)
+    return (1 + rate) ** yearfrac - 1
+
+
+def simple_periodic_rate(rate, freq):
+    """
+    Return simpled periodic rate with the number of periods based on freq.
+    :param rate: Annual rate
+    :type rate: float
+    :param freq: dateutil.relativedelta representing a period. Years equals 1 period, months equal 12, days equal 365.
+    :type freq: relativedelta
+    :return: float
+    """
+    yearfrac = freq.years + (freq.months / 12) + (freq.days / 365)
+    return rate * yearfrac
+
+

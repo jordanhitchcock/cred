@@ -95,10 +95,12 @@ def unadjusted_schedule(start_date, end_date, frequency):
 class Monthly:
 
     def __init__(self, months=1):
+        self.years = 0
         self.months = months
+        self.days = 0
 
     def __add__(self, other):
-        if calendar.monthrange(other.year, other.month)[1] == other.day:
+        if is_month_end(other):
             return other + relativedelta(months=self.months + 1, day=1, days=-1)
         return other + relativedelta(months=self.months)
 
@@ -106,8 +108,7 @@ class Monthly:
         return self.__add__(other)
 
     def __mul__(self, other):
-        self.months *= other
-        return self
+        return self.__class__(months=self.months * other)
 
     def __rmul__(self, other):
-        self.__mul__(other)
+        return self.__mul__(other)

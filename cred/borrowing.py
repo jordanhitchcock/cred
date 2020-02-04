@@ -3,13 +3,10 @@ from dateutil.relativedelta import relativedelta
 
 from pandas import DataFrame, Series
 
-from cred.businessdays import unadjusted_schedule, is_month_end
+from cred.businessdays import unadjusted_schedule, Monthly
 from cred.interest_rate import actual360, thirty360
 from cred.period import Period, adj_date, fixed_interest_rate, interest_pmt, bop_principal, eop_principal, interest_only, floating_interest_rate, constant_pmt_amort
 from cred.period import START_DATE, END_DATE, ADJ_END_DATE, BOP_PRINCIPAL, EOP_PRINCIPAL, PRINCIPAL_PAYMENT, INDEX_RATE, INTEREST_RATE, INTEREST_PAYMENT
-
-
-month_end = relativedelta(months=1, day=31)
 
 
 def open_repayment(borrowing, date):
@@ -46,10 +43,17 @@ def yield_maintenance(rate_provider, wal=False, spread=0, day_count_method=actua
     :return: function
     """
     def pv(borrowing, exit_date):
+        if exit_date > borrowing.end_date:
+            raise Exception(f'Repayment date {exit_date} is beyond the borrowing end date.')
+
+        if exit_date == borrowing.end_date:
+            return 0
+
         remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=False, attrs=[END_DATE, INTEREST_PAYMENT, PRINCIPAL_PAYMENT])
 
         remaining_pmt_dates = remaining_cf.pop(END_DATE)
         remaining_cf = Series(remaining_cf.sum(axis=1).values, index=remaining_pmt_dates)
+
         if wal:
             remaining_days = [(dt - exit_date).days for dt in remaining_pmt_dates]
             remaining_days = sum(remaining_days) / len(remaining_days)
@@ -79,7 +83,7 @@ def defeasance(rate_provider, open_date=None, dfz_to_open=False, day_count=thirt
     :return: function
     """
     if dfz_to_open and open_date is None:
-        raise Exception('Cannot defease to open date since no open date was provided.')
+        raise Exception('Cannot defease to open date because no open date was provided.')
 
     def dfz(borrowing, exit_date):
         remaining_cf = borrowing.remaining_cash_flow(exit_date, include_date=False,
@@ -103,12 +107,6 @@ def defeasance(rate_provider, open_date=None, dfz_to_open=False, day_count=thirt
         return sum([amt * df for amt, df in zip(remaining_cf, discount_factors)])
 
     return dfz
-"""
-Lockout
-Open date
-dfz through open
- 
-"""
 
 
 class Borrowing:
@@ -166,7 +164,7 @@ class PeriodicBorrowing(Borrowing):
     def __init__(self, initial_principal, start_date, frequency, first_regular_date=None, periods=None, end_date=None,
                  period_rules=None):
         """
-        Generic Borrowing type with periods of the same frequency.
+        Generic Borrowing type with periods of the same freqfuency.
         Must provide one of periods or end_date but not both.
         :param initial_principal: Initial principal
         :type initial_principal: int, float
@@ -337,10 +335,12 @@ class FixedRateBorrowing(PeriodicBorrowing):
         if not first_regular_date:
             first_regular_date = start_date
 
-        if is_month_end(first_regular_date):
-            frequency = month_end
-        else:
-            frequency = relativedelta(months=1)
+        # if is_month_end(first_regular_date):
+        #     frequency = month_end
+        # else:
+        #     frequency = relativedelta(months=1)
+
+        frequency = Monthly()
 
         if not end_date:
             end_date = first_regular_date + (periods * frequency)

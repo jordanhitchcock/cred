@@ -2,21 +2,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import pytest
 
-from cred.interest_rate import actual360, thirty360, is_month_end
-
-
-class Provider:
-    def spread(self, period):
-        return 0.03
-
-    def index_rate(self, period):
-        return 0.01
-
-    def coupon(self, period):
-        return 0.05
-
-
-rate_provider = Provider()
+from cred.interest_rate import actual360, thirty360, is_month_end, decompounded_periodic_rate, simple_periodic_rate
 
 
 @pytest.mark.parametrize(
@@ -63,3 +49,34 @@ def test_thirty360(dt1, dt2, expected):
 def test_is_month_end(dt, expected):
     assert is_month_end(dt) == expected
 
+
+@pytest.mark.parametrize(
+    'rate,freq,expected',
+    [
+        (0, relativedelta(months=3), 0.0),
+        (0.1, relativedelta(years=2), 0.21),
+        (0.1, relativedelta(years=1), 0.1),
+        (0.1, relativedelta(months=3), 0.0241136890844451),
+        (0.1, relativedelta(months=1), 0.00797414042890376),
+        (-0.05, relativedelta(months=3), -0.0127414550985662),
+        (0.1, relativedelta(months=1, days=1), 0.008237380814549500)
+    ]
+)
+def test_decompounded_periodic_rate(rate, freq, expected):
+    assert decompounded_periodic_rate(rate, freq) + expected == pytest.approx(2 * expected)
+
+
+@pytest.mark.parametrize(
+    'rate,freq,expected',
+    [
+        (0, relativedelta(months=3), 0.0),
+        (0.1, relativedelta(years=2), 0.2),
+        (0.1, relativedelta(years=1), 0.1),
+        (0.1, relativedelta(months=3), 0.025),
+        (0.1, relativedelta(months=1), 0.008333333333333330),
+        (-0.05, relativedelta(months=3), -0.0125),
+        (0.1, relativedelta(months=1, days=1), 0.008607305936073060)
+    ]
+)
+def test_simple_periodic_rate(rate, freq, expected):
+    assert simple_periodic_rate(rate, freq) + expected == pytest.approx(2 * expected)
