@@ -162,7 +162,7 @@ class Borrowing:
 class PeriodicBorrowing(Borrowing):
 
     def __init__(self, initial_principal, start_date, frequency, first_regular_date=None, periods=None, end_date=None,
-                 period_rules=None):
+                 period_rules=None, fees=None):
         """
         Generic Borrowing type with periods of the same freqfuency.
         Must provide one of periods or end_date but not both.
@@ -180,6 +180,8 @@ class PeriodicBorrowing(Borrowing):
         :type end_date: datetime.datetime, None
         :param period_rules: List of (str_name, function) rules to create Period schedules
         :type period_rules: list
+        :param fees: List of fees as (date, amount) tuples
+        :type fees: list, None
         """
         if periods is None and end_date is None:
             raise Exception('Must provide either the number of periods or the end date.')
@@ -207,6 +209,8 @@ class PeriodicBorrowing(Borrowing):
 
         super().__init__(period_dates, period_rules=self.period_rules)
 
+        self.fees = fees
+
     def repayment_cost(self, date):
         """ Calculate loan repayment costs for date. Should be implemented by subclasses.
         Implementations should not include regularly scheduled principal and interest on the repayment date."""
@@ -231,6 +235,12 @@ class PeriodicBorrowing(Borrowing):
         pmts[exit_date] = pmts.get(exit_date, 0) + repayment_amt
 
         pmts[self.start_date] = pmts.get(self.start_date, 0) - self.initial_principal
+
+        if self.fees is not None:
+            for dt, amt in self.fees:
+                if dt <= exit_date:
+                    pmts[dt] = pmts.get(dt, 0) + amt
+
         return pmts.sort_index()
 
     def outstanding_principal(self, date):
@@ -259,7 +269,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
     def __init__(self, start_date, coupon, initial_principal, end_date=None, periods=None, first_regular_date=None,
                  amort=None, frequency=relativedelta(months=1), repayment=None, day_count=actual360,
-                 additional_period_rules=None):
+                 additional_period_rules=None, **kwargs):
         """
         Borrowing subclass for fixed rate debt.
 
@@ -285,9 +295,10 @@ class FixedRateBorrowing(PeriodicBorrowing):
         :type day_count: function
         :param additional_period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
         :type additional_period_rules: iterable
+        :param kwargs: Additional keyword arguments passed to superclass
         """
         super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
-                         periods=periods, end_date=end_date)
+                         periods=periods, end_date=end_date, **kwargs)
 
         self.coupon = coupon
         self.initial_principal = initial_principal
@@ -311,7 +322,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
     @classmethod
     def monthly_amortizing_loan(cls, start_date, principal, coupon, end_date=None, periods=None, first_regular_date=None,
-                                amort_periods=360, months_io=0, repayment=open_repayment, day_count=actual360):
+                                amort_periods=360, months_io=0, repayment=open_repayment, day_count=actual360, **kwargs):
         """
         Convenience method for creating monthly fixed rate amortizing Borrowings. If the first regular payment date is
         on month end, assumings month end frequency.
@@ -325,6 +336,7 @@ class FixedRateBorrowing(PeriodicBorrowing):
         :param amort_periods: Number of months in amortization schedule; default is 360 months
         :param months_io: Months interest only from the first regular payment date; default is 0
         :param day_count: Day count method for calculating interest; default is actual / 360
+        :param kwargs: Additional keyword arguments passed to superclass
         :return: FixedRateBorrowing
         """
         if periods is None and end_date is None:
@@ -334,11 +346,6 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         if not first_regular_date:
             first_regular_date = start_date
-
-        # if is_month_end(first_regular_date):
-        #     frequency = month_end
-        # else:
-        #     frequency = relativedelta(months=1)
 
         frequency = Monthly()
 
@@ -354,14 +361,14 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         return cls(start_date=start_date, coupon=coupon, initial_principal=principal, end_date=end_date,
                    first_regular_date=first_regular_date, amort=amort_func, frequency=frequency, repayment=repayment,
-                   day_count=day_count)
+                   day_count=day_count, **kwargs)
 
 
 class FloatingRateBorrowing(PeriodicBorrowing):
 
     def __init__(self, start_date, spread, index_rate_provider, initial_principal, end_date=None, periods=None,
                  first_regular_date=None, frequency=relativedelta(months=1), repayment=open_repayment,
-                 day_count=actual360, additional_period_rules=None):
+                 day_count=actual360, additional_period_rules=None, **kwargs):
         """
         Borrowing subclass for floating rate borrowings. The index_rate_provider should be a function that takes one
         datetime argument and returns a the appropriate index rate.
@@ -388,6 +395,7 @@ class FloatingRateBorrowing(PeriodicBorrowing):
         :type day_count: function
         :param additional_period_rules: Optional iterable returning (i, rule) to insert additional rules at index i
         :type additional_period_rules: iterable
+        :param kwargs: Additional keyword arguments passed to superclass
         """
         super().__init__(initial_principal, start_date, frequency, first_regular_date=first_regular_date,
                          periods=periods, end_date=end_date)
