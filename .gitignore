@@ -70,6 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/build
 
 # PyBuilder
 target/
@@ -130,3 +131,4 @@ dmypy.json
 
 .idea/
 /ignore_resources
+.DS_Store
