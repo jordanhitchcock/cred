@@ -44,7 +44,7 @@ object for a 1 year loan with monthly interest payments at 5.0%.
 
 Other convenience arguments than can be defined at initialization include the amortization method (default is interest only) and day count convention (default is actual / 360). See the documentation for additional detail.
 
-Calling `borrowing.schedule()` returns a `pandas.DataFrame` with the scheduled cash flows.::
+Calling `borrowing.schedule()` returns a `pandas.DataFrame` with the scheduled cash flows::
 
     index  start_date    end_date payment_date  bop_principal  interest_rate  interest_payment  principal_payment       payment  eop_principal
     0      2020-01-01  2020-02-01   2020-02-01       10000000           0.05      43055.555556                  0  4.305556e+04       10000000
