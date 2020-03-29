@@ -1,20 +1,24 @@
 import pandas as pd
-
-from period import Period, InterestPeriod
+from functools import  wraps
+from .period import Period, InterestPeriod
+from .interest_rate import actual360
 
 
 class _Borrowing:
 
     def __init__(self):
         self._periods = {}
+        self._in_context = False
         self._cache = False
         self.period_type = Period
 
     def __enter__(self):
         self._start_caching()
+        self._in_context = True
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self._in_context = False
         self._stop_caching()
 
     def period(self, i):
@@ -45,16 +49,18 @@ class _Borrowing:
         self._cache = True
 
     def _stop_caching(self):
-        self._cache = False
-        self._periods = {}
+        if not self._in_context:
+            self._cache = False
+            self._periods = {}
 
     def set_period_values(self, period):
         """
         Called to set period values. Public interface to customize period values, mst be implemented by subclasses.
+
         Parameters
         __________
         period: Period
-            Period to set values
+            Period to set values. Use `period.add_payment`, `period.add_balance`, or `period.add_data_field` to add to include in the period's schedule output.
         """
         raise NotImplementedError
 
@@ -77,9 +83,12 @@ class PeriodicBorrowing(_Borrowing):
         Interest period frequency
     initial_principal
         Initial principal amount of the borrowing
+    year_frac: function
+        Function that takes two dates and returns the year fraction between them. Bound to borrowing as `.year_frac`.
+        Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal):
+    def __init__(self, start_date, end_date, freq, initial_principal, year_frac=actual360):
 
         super().__init__()
         self.period_type = InterestPeriod
@@ -87,6 +96,10 @@ class PeriodicBorrowing(_Borrowing):
         self.end_date = end_date
         self.freq = freq
         self.initial_principal = initial_principal
+        self._year_frac = year_frac
+
+    def year_frac(self, dt1, dt2):
+        return self._year_frac(dt1, dt2)
 
     def set_period_values(self, period):
         period.add_start_date(self.period_start_date(period.index))
@@ -117,7 +130,8 @@ class PeriodicBorrowing(_Borrowing):
         raise NotImplementedError
 
     def interest_payment(self, period):
-        return period.interest_rate / 12 * period.bop_principal
+        yf = self.year_frac(period.start_date, period.end_date)
+        return period.interest_rate * yf * period.bop_principal
 
     def principal_payment(self, period):
         if period.end_date == self.end_date:
@@ -153,12 +167,15 @@ class FixedRateBorrowing(PeriodicBorrowing):
     Parameters
     ----------
     start_date: datetime-like
+        Borrowing start date
     end_date: datetime-like
+        Borrowing end date
     freq: dateutil.relativedelta.relativedelta
         Interest period frequency
     initial_principal
         Initial principal amount of the borrowing
-    coupon
+    coupon: float
+        Coupon rate
     amort_periods: int, object, optional(default=None)
         If None (default), will be calculated as interest only.
 
@@ -171,10 +188,13 @@ class FixedRateBorrowing(PeriodicBorrowing):
         equal to the number of periods. Custom amortization schedules can be provided this way, for example using lists
         or `pandas.Series` objects with amortization amount for period i at index i. Note that custom amortizations
         schedules should include the balloon payment as well.
+    year_frac: function
+        Function that takes two dates and returns the year fraction between them. Bound to borrowing as `.year_frac`.
+        Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None):
-        super().__init__(start_date, end_date, freq, initial_principal)
+    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, year_frac=actual360):
+        super().__init__(start_date, end_date, freq, initial_principal, year_frac=year_frac)
         self.coupon = coupon
         self.amort_periods = amort_periods
 

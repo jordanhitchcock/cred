@@ -1,27 +1,24 @@
-Welcome to cred's documentation!
-================================
+Welcome to **cred**'s Documentation!
+====================================
 
-Borrowing module documentation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autoclass:: borrowing.PeriodicBorrowing
-   :members:
-
-.. autoclass:: borrowing.FixedRateBorrowing
-   :members:
+.. include:: ../../README.rst
+    :start-line: 2
 
 
-TOC
-^^^
+User Guide
+----------
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   borrowing
+   period
+   helpers
 
 
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

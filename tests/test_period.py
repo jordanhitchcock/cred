@@ -1,6 +1,6 @@
 from datetime import date
 import pytest
-from period import Period, InterestPeriod
+from cred.period import Period, InterestPeriod
 
 
 @pytest.fixture

@@ -2,7 +2,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import pandas as pd
 import pytest
-from borrowing import _Borrowing, PeriodicBorrowing, FixedRateBorrowing
+from cred.borrowing import _Borrowing, PeriodicBorrowing, FixedRateBorrowing
+from cred.interest_rate import actual360, thirty360
 
 
 @pytest.fixture
@@ -20,15 +21,15 @@ def simple_borrowing_subclass():
             return period
 
     return SubBorrowing()
-
-
-@pytest.fixture
-def periodic_borrowing():
-    pb = PeriodicBorrowing(datetime(2020, 1, 1),
-                           datetime(2022, 1, 1),
-                           relativedelta(months=1),
-                           1_000_000.0)
-    return pb
+#
+#
+# @pytest.fixture
+# def periodic_borrowing():
+#     pb = PeriodicBorrowing(datetime(2020, 1, 1),
+#                            datetime(2022, 1, 1),
+#                            relativedelta(months=1),
+#                            1_000_000.0)
+#     return pb
 
 
 @pytest.fixture
@@ -39,7 +40,8 @@ def fixed_io():
         freq=relativedelta(months=1),
         initial_principal=1_000_000.0,
         coupon=0.12,
-        amort_periods=None
+        amort_periods=None,
+        year_frac=actual360
     )
 
 
@@ -51,7 +53,8 @@ def fixed_amortizing_constant_pmt():
         freq=relativedelta(months=1),
         initial_principal=1_000_000.0,
         coupon=0.12,
-        amort_periods=360
+        amort_periods=25 * 12,
+        year_frac=actual360
     )
 
 
@@ -63,7 +66,8 @@ def fixed_amortizing_custom():
         freq=relativedelta(months=1),
         initial_principal=1_000_000.0,
         coupon=0.12,
-        amort_periods=[5_000.0] * 23 + [885000.0]
+        amort_periods=[5_000.0] * 23 + [885000.0],
+        year_frac=thirty360
     )
 
 
@@ -113,18 +117,18 @@ def test_set_period_values(borrowing, simple_borrowing_subclass):
 
 
 def test_fixed_rate_schedule(fixed_io):
-    expected_schedule = pd.read_csv('test_fixed_io_schedule.csv', index_col='index', parse_dates=[1, 2, 3])
+    expected_schedule = pd.read_csv('tests/data/test_fixed_io_schedule.csv', index_col='index', parse_dates=[1, 2, 3])
     pd.testing.assert_frame_equal(expected_schedule, fixed_io.schedule())
 
 
 def test_fixed_amortizing_constant_pmt_schedule(fixed_amortizing_constant_pmt):
-    expected_schedule = pd.read_csv('test_fixed_amortizing_constant_pmt_schedule.csv', index_col='index',
+    expected_schedule = pd.read_csv('tests/data/test_fixed_amortizing_constant_pmt_schedule.csv', index_col='index',
                                     parse_dates=[1, 2, 3])
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_constant_pmt.schedule())
 
 
 def test_fixed_amortizing_custom_schedule(fixed_amortizing_custom):
-    expected_schedule = pd.read_csv('test_fixed_amortizing_custom_schedule.csv', index_col='index',
+    expected_schedule = pd.read_csv('tests/data/test_fixed_amortizing_custom_schedule.csv', index_col='index',
                                     parse_dates=[1, 2, 3])
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_custom.schedule())
 
