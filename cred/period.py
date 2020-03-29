@@ -5,41 +5,133 @@ from cred.interest_rate import actual360, thirty360
 from cred.businessdays import FederalReserveHolidays, LondonBankHolidays, modified_following
 
 
-START_DATE = 'start_date'
-END_DATE = 'end_date'
-ADJ_START_DATE = 'adj_start_date'
-ADJ_END_DATE = 'adj_end_date'
-BOP_PRINCIPAL = 'bop_principal'
-EOP_PRINCIPAL = 'eop_principal'
-PRINCIPAL_PAYMENT = 'principal_payment'
-INTEREST_RATE = 'interest_rate'
-INTEREST_PAYMENT = 'interest_payment'
-INDEX_RATE = 'index_rate'
+class PeriodMeta(type):
+    def __new__(cls, name, bases, dct):
+        p = super().__new__(cls, name, bases, dct)
+
+        payment_names = []
+        balance_names = []
+        data_field_names = []
+        for k, v in dct.items():
+            if hasattr(v, '_payment'):
+                payment_names.append(v.__name__)
+            if hasattr(v, '_balance'):
+                balance_names.append(v.__name__)
+            if hasattr(v, '_data_field'):
+                data_field_names.append(v.__name__)
+
+        if not hasattr(p, 'payment_names'):
+            p.payment_names = []
+        if not hasattr(p, 'balance_names'):
+            p.balance_names = []
+        if not hasattr(p, 'data_field_names'):
+            p.data_field_names = []
+
+        p.payment_names += payment_names
+        p.balance_names += balance_names
+        p.data_field_names += data_field_names
+        return p
 
 
-class Period:
+class Period(metaclass=PeriodMeta):
 
-    def __init__(self, period_id, start_date, end_date, previous_period, rules=None):
+    payment_names = []
+    balance_names = []
+    data_field_names = []
+
+    def __init__(self, period_id, borrowing):
         """
-        Create a Period.
-        :param period_id: Period id
-        :param start_date: Period start date
-        :param end_date: Period end date
-        :param previous_period: Previous period, or None if the first period
-        :param rules: List of (str, function) rules to build the period schedule
+        Base Period class.
+        :param period_id: Zero-index id
+        :param borrowing: Borrowing that manages Period instance
         """
-        self.id = period_id
-        self.start_date = start_date
-        self.end_date = end_date
-        self.previous_period = previous_period
-        self.schedule = {START_DATE: self.start_date, END_DATE: self.end_date}
+        self.period_id = period_id
+        self.borrowing = borrowing
 
-        if rules is not None:
-            for name, func in rules:
-                schedule_value = func(self)
+    def build_schedule(self):
+        """
+        Called to build period schedule. Override in subclasses to return dictionary of {schedule_name: value} items.
+        :return: dict
+        """
+        raise NotImplementedError
 
-                self.__setattr__(name, schedule_value)
-                self.schedule[name] = schedule_value
+    @staticmethod
+    def payment(f):
+        f._payment = True
+        return f
+
+    @staticmethod
+    def balance(f):
+        f._balance = True
+        return f
+
+    @staticmethod
+    def data_field(f):
+        f._data_field = True
+        return f
+
+
+class RegularPeriod(Period):
+    """
+    Convenience class for common fixed rate loan structures.
+    """
+
+    def build_schedule(self):
+        return {
+            'start_date': self.start_date,
+            'end_date': self.end_date,
+            'payment_date': self.pmt_date,
+            'bop_balance': self.bop_balance,
+            'interest_rate': self.interest_rate,
+            'interest_payment': self.interest_pmt,
+            'principal_payment': self.principal_pmt,
+            'payment': self.pmt,
+            'eop_balance': self.eop_balance
+        }
+
+    def start_date(self):
+        pass
+
+    def end_date(self):
+        pass
+
+    def pmt_date(self):
+        pass
+
+    def bop_balance(self):
+        pass
+
+    def interest_rate(self):
+        return self.borrowing.interest_rate(self.period_id)
+
+    def interest_pmt(self):
+        pass
+
+    def principal_pmt(self):
+        pass
+
+    def pmt(self):
+        pass
+
+    def eop_balance(self):
+        pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Date functions
@@ -68,130 +160,3 @@ def adj_date(unadj_date_attr, calendars=[FederalReserveHolidays, LondonBankHolid
 
     return adj_func
 
-
-# Principal functions
-def bop_principal(initial_principal, eop_attr=EOP_PRINCIPAL):
-    def bop_principal(period):
-        if period.previous_period is not None:
-            return period.previous_period.__getattribute__(eop_attr)
-        return initial_principal
-
-    return bop_principal
-
-
-def eop_principal(bop_principal_attr=BOP_PRINCIPAL, principal_pmt_attr=[PRINCIPAL_PAYMENT]):
-    def eop_principal(period):
-        principal_pmts = 0
-        for attr in principal_pmt_attr:
-            amt = period.__getattribute__(attr)
-            principal_pmts += amt
-
-        return period.__getattribute__(bop_principal_attr) - principal_pmts
-
-    return eop_principal
-
-
-def interest_only(maturity_date, bop_principal_attr=BOP_PRINCIPAL):
-    def principal_pmt(period):
-        if period.end_date == maturity_date:
-            return period.__getattribute__(bop_principal_attr)
-
-        return 0
-
-    return principal_pmt
-
-
-def constant_pmt_amort(amort_start,
-                       maturity_date,
-                       amort_periods,
-                       freq,
-                       annual_rate,
-                       initial_principal,
-                       fv=0,
-                       interest_attr=INTEREST_PAYMENT,
-                       bop_principal_attr=BOP_PRINCIPAL):
-    """
-    Factory for constant payment amortization Period rules.
-
-    :param amort_start: First unadjusted amortization payment date, payments before this date are interest only
-    :type amort_start: datetime
-    :param maturity_date: Borrowing maturity date
-    :type maturity_date: datetime
-    :param amort_periods: Total amortization periods
-    :type amort_periods: int
-    :param freq: Amortization payment frequency
-    :type freq: relativedelta
-    :param annual_rate: Annual interest rate for calculating payment amount
-    :type annual_rate: float
-    :param initial_principal: Initial principal
-    :type initial_principal: int, float
-    :param fv: Future value
-    :type fv: int, float
-    :param interest_attr: Name of interest payment attribute, defaults to interest
-    :type interest_attr: str
-    :param bop_principal_attr: Beginning of period principal attribute name, default to bop_principal
-    :type bop_principal_attr: str
-    :return: func
-    """
-    yearfac = ((freq.years * 360) + (freq.months * 30) + freq.days) / 360
-    periodic_rate = annual_rate * yearfac
-    pmt = (initial_principal - fv) * (periodic_rate + (periodic_rate / ((1 + periodic_rate) ** amort_periods - 1)))
-
-    def principal_pmt(period):
-        if period.end_date == maturity_date:
-            return period.__getattribute__(bop_principal_attr)
-        elif period.end_date < amort_start:
-            return 0
-        return pmt - period.__getattribute__(interest_attr)
-
-    return principal_pmt
-
-
-# Interest functions
-def fixed_interest_rate(coupon):
-    """
-    Factory for fixed rate Period rules.
-
-    :param coupon: Coupon rate
-    :type coupon: float
-    :return: Period rule function for the coupon rate
-    """
-    def interest_rate(period):
-        return coupon
-
-    return interest_rate
-
-
-def interest_pmt(yearfrac_method=actual360, bop_principal_attr=BOP_PRINCIPAL, interest_rate_attr=INTEREST_RATE):
-    """
-    Factory for interest payment Period rules.
-
-    :param yearfrac_method: Day count convention, defaults to `actual360`
-    :type yearfrac_method: function
-    :param bop_principal_attr: Beginning of period principal balance attribute name, defaults to "bop_principal"
-    :type bop_principal_attr: str
-    :param interest_rate_attr: Interest rate attribute name, defaults to "interest_rate"
-    :type interest_rate_attr: str
-    :return: Returns a function to be used as a Period rule for interest payments
-    """
-    def interest(period):
-        yearfrac = yearfrac_method(period.start_date, period.end_date)
-        return period.__getattribute__(bop_principal_attr) * yearfrac * period.__getattribute__(interest_rate_attr)
-
-    return interest
-
-
-def floating_interest_rate(spread, index_rate_attr=INDEX_RATE):
-    """
-    Factory for floating interest rate (spread plus index rate) Period rules.
-
-    :param spread: Loan spread
-    :type spread: float
-    :param index_rate_attr: Index rate rule name
-    :type index_rate_attr: str
-    :return: Returns a function to be used as a Period rule for the interest rate (index plus spread)
-    """
-    def interest_rate(period):
-        return period.__getattribute__(index_rate_attr) + spread
-
-    return interest_rate
