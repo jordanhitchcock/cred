@@ -1,12 +1,15 @@
+from dateutil.relativedelta import relativedelta
+
 import pandas as pd
-from functools import  wraps
-from .period import Period, InterestPeriod
-from .interest_rate import actual360
+from cred.businessdays import unadjusted, modified_following
+from cred.interest_rate import actual360
+from cred.period import Period, InterestPeriod
 
 
 class _Borrowing:
 
-    def __init__(self):
+    def __init__(self, desc=None):
+        self.desc = desc
         self._periods = {}
         self._in_context = False
         self._cache = False
@@ -60,7 +63,8 @@ class _Borrowing:
         Parameters
         __________
         period: Period
-            Period to set values. Use `period.add_payment`, `period.add_balance`, or `period.add_data_field` to add to include in the period's schedule output.
+            Period to set values. Use `period.add_payment`, `period.add_balance`, or `period.add_data_field` to add to
+            include in the period's schedule output.
         """
         raise NotImplementedError
 
@@ -83,23 +87,37 @@ class PeriodicBorrowing(_Borrowing):
         Interest period frequency
     initial_principal
         Initial principal amount of the borrowing
+    first_reg_start: datetime-like, optional(default=None)
+        Start date of first regular interest period. If `None` (default), will be the same as the `start_date`.
     year_frac: function
-        Function that takes two dates and returns the year fraction between them. Bound to borrowing as `.year_frac`.
+        Function that takes two dates and returns the year fraction between them. Bound to `Borrowing.year_frac`.
         Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
+    pmt_convention: function, optional(default=cred.businessdays.unadjusted)
+        Function that takes a date as its first argument and a calendar as its second argument and returns the adjusted
+        date. See `cred.businessdays.following`, `preceeding`, and `modified_following`. Bound to `adjust_pmt_date'.
+    holidays: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
+        Payment holidays to use in adjusting payment dates. Defaults to None.
+    desc: int, str, optional(default=None)
+        Optional borrowing description.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal, year_frac=actual360):
+    def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
+                 pmt_convention=unadjusted, holidays=None, desc=None):
 
-        super().__init__()
+        super().__init__(desc)
         self.period_type = InterestPeriod
         self.start_date = start_date
+        if first_reg_start is not None:
+            self.first_reg_start = first_reg_start
+        else:
+            self.first_reg_start = start_date
         self.end_date = end_date
         self.freq = freq
         self.initial_principal = initial_principal
-        self._year_frac = year_frac
+        self.holidays = holidays
 
-    def year_frac(self, dt1, dt2):
-        return self._year_frac(dt1, dt2)
+        self.year_frac = year_frac
+        self.adjust_pmt_date = pmt_convention
 
     def set_period_values(self, period):
         period.add_start_date(self.period_start_date(period.index))
@@ -113,13 +131,29 @@ class PeriodicBorrowing(_Borrowing):
         period.add_display_field(self.eop_principal(period), 'eop_principal')
 
     def period_start_date(self, i):
+        # first period
+        if i == 0:
+            return self.start_date
+        # beginning stub period
+        if self.start_date != self.first_reg_start:
+            return self.first_reg_start + self.freq * (i - 1)
+        # not beginning stub period
         return self.start_date + self.freq * i
 
     def period_end_date(self, i):
-        return self.start_date + self.freq * (i + 1)
+        if self.start_date == self.first_reg_start:
+            i += 1
+
+        end_dt = self.first_reg_start + self.freq * i
+
+        if end_dt > self.end_date + self.freq - relativedelta(days=1):
+            return None
+        return min(end_dt, self.end_date)
 
     def pmt_date(self, period):
-        return period.end_date
+        if (self.start_date != self.first_reg_start) and period.index == 0:
+            return period.start_date
+        return self.adjust_pmt_date(period.end_date, self.holidays)
 
     def bop_principal(self, period):
         if period.index == 0:
@@ -134,7 +168,7 @@ class PeriodicBorrowing(_Borrowing):
         return period.interest_rate * yf * period.bop_principal
 
     def principal_payment(self, period):
-        if period.end_date == self.end_date:
+        if period.end_date >= self.end_date:
             return period.bop_principal
         return 0
 
@@ -150,7 +184,7 @@ class PeriodicBorrowing(_Borrowing):
         schedule = []
 
         i = 0
-        while self.period_end_date(i) <= self.end_date:
+        while self.period_end_date(i) is not None:
             p = self.period(i)
             schedule.append(p.schedule())
             i += 1
@@ -179,22 +213,21 @@ class FixedRateBorrowing(PeriodicBorrowing):
     amort_periods: int, object, optional(default=None)
         If None (default), will be calculated as interest only.
 
-        If `amort_periods` is a single number, then will
-        calculate principal payments based on a fully amortizing schedule with constant principal and interest
-        payments (e.g. `360` where `freq=relativedelta(months=1)` will calculate 30 year amortization with constant
-        monthly payments.
+        If `amort_periods` is a single number `n`, then will calculate principal payments based on a fully amortizing
+        schedule over `n` periods of length `freq` with constant principal and interest payments (e.g. `360` where
+        `freq=relativedelta(months=1)` will calculate 30 year amortization with constant monthly payments.
 
         If `amort_periods` is an object, it must implement `__getitem__` and must have length at least greater than or
         equal to the number of periods. Custom amortization schedules can be provided this way, for example using lists
         or `pandas.Series` objects with amortization amount for period i at index i. Note that custom amortizations
         schedules should include the balloon payment as well.
-    year_frac: function
-        Function that takes two dates and returns the year fraction between them. Bound to borrowing as `.year_frac`.
-        Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
+    **kwargs
+        Keyword arguments passed to superclass (PeriodicBorrowing) initialization. Ex. `desc` for borrowing description,
+        `year_frac` for day count convention, `pmt_convention` for business day adjustment, `first_reg_start`, etc.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, year_frac=actual360):
-        super().__init__(start_date, end_date, freq, initial_principal, year_frac=year_frac)
+    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, **kwargs):
+        super().__init__(start_date, end_date, freq, initial_principal, **kwargs)
         self.coupon = coupon
         self.amort_periods = amort_periods
 
@@ -217,6 +250,9 @@ class FixedRateBorrowing(PeriodicBorrowing):
         return 0
 
     def _constant_pmt_amort(self, period):
+        # no amort if first period is stub
+        if (period.index == 0) & (self.start_date != self.first_reg_start):
+            return 0
         # last period
         if period.end_date == self.end_date:
             return period.bop_principal
@@ -227,6 +263,4 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         pmt = periodic_ir / (1 - (1 + periodic_ir) ** -self.amort_periods) * self.initial_principal
         return pmt - period.interest_payment
-
-
 

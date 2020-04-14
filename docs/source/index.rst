@@ -14,7 +14,9 @@ User Guide
 
    borrowing
    period
+   businessdays
    helpers
+   changelog
 
 
 Indices and tables

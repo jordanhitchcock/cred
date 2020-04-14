@@ -1,9 +1,4 @@
-import calendar
-
-
-def is_month_end(dt):
-    """Returns True if dt is the last day of the month."""
-    return dt.day == calendar.monthrange(dt.year, dt.month)[1]
+from cred.businessdays import is_month_end
 
 
 def actual360(dt1, dt2):

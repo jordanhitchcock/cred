@@ -8,16 +8,17 @@ README = (HERE / "README.rst").read_text()
 
 setup(
     name='cred',
-    version='0.0.1',
+    version='0.0.2',
     packages=['cred'],
-    description='Easy modeling and scenario analytics for commercial real estate debt',
+    description='Making commercial real estate debt modeling and scenario analytics for easy',
+    keywords='real-estate debt mortgage finance',
     long_description=README,
     long_description_content_type='text/x-rst',
     url='https://github.com/jordanhitchcock/cred',
     author='Jordan Hitchcock',
     license='MIT',
     python_requires='>=3.7',
-    install_requires=['pandas>=0.25.2'],
+    install_requires=['pandas>=0.25.2', 'python-dateutil>=2.8.0'],
     tests_require=['pytest'],
     include_package_data=True,
     classifiers=[

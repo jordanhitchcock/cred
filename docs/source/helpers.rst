@@ -1,6 +1,7 @@
 Helper Functions
 ================
 
+
 Actual / 360
 ------------
 
@@ -11,4 +12,3 @@ Actual / 360
 ------------
 
 .. autofunction:: cred.thirty360
-

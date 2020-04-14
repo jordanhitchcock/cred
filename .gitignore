@@ -132,3 +132,5 @@ dmypy.json
 .idea/
 /ignore_resources
 .DS_Store
+
+tests/data/_templates

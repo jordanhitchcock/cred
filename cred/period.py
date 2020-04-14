@@ -88,12 +88,8 @@ class Period:
 class InterestPeriod(Period):
     """
     Period type used by PeriodicBorrowing and its subclasses.
-
-    Parameters
-    ----------
-    i: int
-        Zero-based period index (e.g. the fourth period will have index 3)
     """
+    # TODO: add better documentation for the date methods
 
     def __init__(self, i):
         super().__init__(i)

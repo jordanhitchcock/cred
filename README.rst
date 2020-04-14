@@ -66,19 +66,19 @@ Floating Rate Example
 Floating rate borrowing objects require subclassing `PeriodicBorrowing` and implementing the `interest_rate` method.
 The `interest_rate` method is called as part of the loop that calculates loan values for each period. It receives an `InterestPeriod` object which contains `index`, `start_date`, and `end_date` attributes for the period.
 
-The example below generates random forward rates between 1.5% and 2.0% and adds a 2.0% margin to calculate total interest.
+The example below generates random index resets between 1.5% and 2.0% and adds a 2.0% margin to calculate total interest.
 
 .. code-block:: python
 
     import random
     from cred import PeriodicBorrowing
 
-    class MyFloatingRateLoan(PeriodicBorrowing):
+    class MyFloatingRateLoanType(PeriodicBorrowing):
 
         def interest_rate(self, period):
             return random.uniform(0.015, 0.02) + 0.02
 
-    floating_loan = MyFloatingRateLoan(
+    floating_loan = MyFloatingRateLoanType(
         start_date=date(2020, 1, 1),
         end_date=date(2021, 1, 1),
         freq=relativedelta(months=1),
@@ -114,7 +114,7 @@ In addition to modifying current schedule columns, new fields can easily be adde
 
 .. code-block:: python
 
-    class MyCustomLoan(MyFloatingRateLoan):
+    class MyCustomLoanType(MyFloatingRateLoanType):
 
         def noi(self, period):
             return 60000 * (1 + 0.03 / 12 * period.index)
@@ -127,7 +127,7 @@ In addition to modifying current schedule columns, new fields can easily be adde
             period.add_display_field(self.noi(period), 'noi')
             period.add_display_field(self.dscr(period), 'dscr')
 
-    custom_loan = MyCustomLoan(
+    custom_loan = MyCustomLoanType(
         start_date=date(2020, 1, 1),
         end_date=date(2021, 1, 1),
         freq=relativedelta(months=1),
@@ -162,7 +162,8 @@ The implementation for the `bop_principal` method is::
             return self.initial_principal
         return self.period(period.index - 1).eop_principal
 
-.. note::  Always reference the currrent period with the `period` argument and not through `self.period` as doing so will cause infinite recursion problems.
+
+.. note::  Always reference the current period with the `period` argument and not through `self.period` as doing so will cause infinite recursion problems.
 
 Accessing values from previous periods provides a simple and intuitive way to implement recursive calculations, for example capitalizing interest expense for a construction loan.
 
