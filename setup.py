@@ -17,7 +17,7 @@ setup(
     url='https://github.com/jordanhitchcock/cred',
     author='Jordan Hitchcock',
     license='MIT',
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     install_requires=['pandas>=0.25.2', 'python-dateutil>=2.8.0'],
     tests_require=['pytest'],
     include_package_data=True,
