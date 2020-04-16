@@ -247,6 +247,20 @@ def test_fixed_constant_amort_start_and_end_stubs(fixed_constant_amort_start_and
     pd.testing.assert_frame_equal(expected_start_and_end_stub, fixed_constant_amort_start_and_end_stubs.schedule())
 
 
+def test_fixed_constant_amort_parital_io(fixed_constant_amort_no_stubs, fixed_constant_amort_start_and_end_stubs):
+    fixed_constant_amort_no_stubs.io_periods = 6
+    expected_no_stub = pd.read_csv('tests/data/test_fixed_constant_amort_no_stubs_6mo_io.csv',
+                                   index_col='index',
+                                   parse_dates=[1, 2, 3])
+    pd.testing.assert_frame_equal(expected_no_stub, fixed_constant_amort_no_stubs.schedule())
+
+    fixed_constant_amort_start_and_end_stubs.io_periods = 6
+    expected_end_and_start_stubs = pd.read_csv('tests/data/test_fixed_constant_amort_start_and_end_stubs_6mo_io.csv',
+                                               index_col='index',
+                                               parse_dates=[1, 2, 3])
+    pd.testing.assert_frame_equal(expected_end_and_start_stubs, fixed_constant_amort_start_and_end_stubs.schedule())
+
+
 # Fixed rate with custom amortization schedule
 @pytest.fixture
 def fixed_amortizing_custom_no_stubs():
@@ -328,8 +342,5 @@ def test_fixed_amortizing_custom_start_and_end_stubs(fixed_amortizing_custom_sta
                                     index_col='index',
                                     parse_dates=[1, 2, 3])
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_custom_start_and_end_stubs.schedule())
-
-
-
 
 

@@ -221,15 +221,20 @@ class FixedRateBorrowing(PeriodicBorrowing):
         equal to the number of periods. Custom amortization schedules can be provided this way, for example using lists
         or `pandas.Series` objects with amortization amount for period i at index i. Note that custom amortizations
         schedules should include the balloon payment as well.
+    io_periods: int, optional(default=0)
+        If `amort_periods` is a number (i.e. amortization with constant principal and interest payments), then defines
+        the leading number of full interest only periods. Calculated from the `first_reg_start` date, so any leading
+        stub periods are ignored.
     **kwargs
         Keyword arguments passed to superclass (PeriodicBorrowing) initialization. Ex. `desc` for borrowing description,
         `year_frac` for day count convention, `pmt_convention` for business day adjustment, `first_reg_start`, etc.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, **kwargs):
+    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, io_periods=0, **kwargs):
         super().__init__(start_date, end_date, freq, initial_principal, **kwargs)
         self.coupon = coupon
         self.amort_periods = amort_periods
+        self.io_periods = io_periods
 
     def interest_rate(self, period):
         return self.coupon
@@ -250,6 +255,9 @@ class FixedRateBorrowing(PeriodicBorrowing):
         return 0
 
     def _constant_pmt_amort(self, period):
+        # no amort if in io period
+        if period.start_date < self.first_reg_start + self.freq * self.io_periods:
+            return self._interest_only(period)
         # no amort if first period is stub
         if (period.index == 0) & (self.start_date != self.first_reg_start):
             return 0
