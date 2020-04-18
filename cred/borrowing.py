@@ -1,7 +1,7 @@
 from dateutil.relativedelta import relativedelta
 
 import pandas as pd
-from cred.businessdays import unadjusted, modified_following
+from cred.businessdays import unadjusted, Monthly
 from cred.interest_rate import actual360
 from cred.period import Period, InterestPeriod
 
@@ -74,7 +74,8 @@ class _Borrowing:
 
 
 class PeriodicBorrowing(_Borrowing):
-    """Abstract class for debt with regular, periodic principal and interest periods. Superclass for
+    """
+    Abstract class for debt with regular, periodic principal and interest periods. Superclass for
     FixedRateBorrowing.
 
     Parameters
@@ -83,8 +84,9 @@ class PeriodicBorrowing(_Borrowing):
         Borrowing start date
     end_date: datetime-like
         Borrowing end date
-    freq: dateutil.relativedelta.relativedelta
-        Interest period frequency
+    freq: Monthly, dateutil.relativedelta.relativedelta
+        Interest period frequency. Using the `Monthly` offset is recommended to automatically recognize end of month
+        roll dates appropriately.
     initial_principal
         Initial principal amount of the borrowing
     first_reg_start: datetime-like, optional(default=None)
@@ -122,7 +124,7 @@ class PeriodicBorrowing(_Borrowing):
     def set_period_values(self, period):
         period.add_start_date(self.period_start_date(period.index))
         period.add_end_date(self.period_end_date(period.index))
-        period.add_pmt_date(self.pmt_date(period))
+        period.add_pmt_date(self.pmt_date(period.index))
         period.add_balance(self.bop_principal(period), 'bop_principal')
         period.add_display_field(self.interest_rate(period), 'interest_rate')
         period.add_display_field(self.interest_payment(period), 'interest_payment')
@@ -150,10 +152,10 @@ class PeriodicBorrowing(_Borrowing):
             return None
         return min(end_dt, self.end_date)
 
-    def pmt_date(self, period):
-        if (self.start_date != self.first_reg_start) and period.index == 0:
-            return period.start_date
-        return self.adjust_pmt_date(period.end_date, self.holidays)
+    def pmt_date(self, i):
+        if (self.start_date != self.first_reg_start) and i == 0:
+            return self.period_start_date(i)
+        return self.adjust_pmt_date(self.period_end_date(i), self.holidays)
 
     def bop_principal(self, period):
         if period.index == 0:

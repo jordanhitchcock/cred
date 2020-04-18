@@ -11,6 +11,8 @@ Homepage: `https://github.com/jordanhitchcock/cred <https://github.com/jordanhit
 
 Documentation: `https://cred.readthedocs.io/en/latest/ <https://cred.readthedocs.io/en/latest/>`_
 
+Tutorials: `Beginner's Guide to Building a Loan with cred <https://github.com/jordanhitchcock/cred_guides/blob/master/loan_schedule_quickstart.ipynb>`_
+
 
 Installation
 ------------
@@ -28,14 +30,13 @@ object for a 1 year loan with monthly interest payments at 5.0%.
 .. code-block:: python
 
     from datetime import date
-    from dateutil.relativedelta import relativedelta
 
-    from cred import FixedRateBorrowing
+    from cred import FixedRateBorrowing, Monthly
 
     loan = FixedRateBorrowing(
         start_date=date(2020, 1, 1),
         end_date=date(2021, 1, 1),
-        freq=relativedelta(months=1),
+        freq=Monthly(months=1),
         initial_principal=10_000_000,
         coupon=0.05
     )
@@ -81,7 +82,7 @@ The example below generates random index resets between 1.5% and 2.0% and adds a
     floating_loan = MyFloatingRateLoanType(
         start_date=date(2020, 1, 1),
         end_date=date(2021, 1, 1),
-        freq=relativedelta(months=1),
+        freq=Monthly(months=1),
         initial_principal=10_000_000
     )
 
@@ -130,7 +131,7 @@ In addition to modifying current schedule columns, new fields can easily be adde
     custom_loan = MyCustomLoanType(
         start_date=date(2020, 1, 1),
         end_date=date(2021, 1, 1),
-        freq=relativedelta(months=1),
+        freq=Monthly(months=1),
         initial_principal=10_000_000
     )
 
@@ -168,8 +169,8 @@ The implementation for the `bop_principal` method is::
 Accessing values from previous periods provides a simple and intuitive way to implement recursive calculations, for example capitalizing interest expense for a construction loan.
 
 
-Period Value State
-^^^^^^^^^^^^^^^^^^
+Period Value Caching
+^^^^^^^^^^^^^^^^^^^^
 
 Certain debt assumptions may change during project evaluation or may be unknown prior to building the cash flows. The clearest example is interest rates which change second by second.
 
