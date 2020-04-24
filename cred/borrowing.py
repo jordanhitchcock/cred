@@ -95,9 +95,10 @@ class PeriodicBorrowing(_Borrowing):
         Function that takes two dates and returns the year fraction between them. Bound to `Borrowing.year_frac`.
         Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
     pmt_convention: function, optional(default=cred.businessdays.unadjusted)
-        Function that takes a date as its first argument and a calendar as its second argument and returns the adjusted
-        date. See `cred.businessdays.following`, `preceeding`, and `modified_following`. Bound to `adjust_pmt_date'.
-    holidays: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
+        Function that takes a date as its first argument and a list of holidays as its second argument and returns the
+        adjusted date. See `cred.businessdays.following`, `preceding`, and `modified_following`.
+        Bound to `adjust_pmt_date'.
+    b_days: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
         Optional borrowing description.
@@ -120,6 +121,48 @@ class PeriodicBorrowing(_Borrowing):
 
         self.year_frac = year_frac
         self.adjust_pmt_date = pmt_convention
+
+    def date_index(self, dt):
+        """
+        Returns the index of the period that contains the date argument. Indexes roll on period start dates for
+        for consistency with the "from and including, to and excluding" convention. So, calling this method on a roll
+        date will return the index for the period which has a matching start date, not the index with a matching end
+        date. Calling this method on the borrowing end date will return the index for the last period.
+
+        Examples
+        --------
+        # Examples for a borrowing starting 2020-01-01, rolling on 2020-02-01, and maturing on 2020-03-01
+        >>> borrowing.date_index(date(2020, 1, 31))
+        0
+        >>> borrowing.date_index(date(2020, 2, 1))
+        1
+        >>> borroiwng.date_index(date(2020, 3, 1))
+        1
+
+        Parameters
+        ----------
+        dt: datetime-like
+
+        Returns
+        -------
+        Index of period that contains `dt`
+        """
+        if dt < self.start_date:
+            raise IndexError(f'Date {dt} is before the borrowing start date {self.start_date}.')
+        if dt > self.end_date:
+            raise IndexError(f'Date {dt} is after borrowing end date {self.end_date}.')
+        # if dt is the borrowing end date,
+        if dt == self.end_date:
+            dt = dt + relativedelta(days=-1)
+
+        i = 0
+        start_date = self.period_start_date(i)
+        while start_date:
+            if start_date > dt:
+                return i - 1
+
+            i += 1
+            start_date = self.period_start_date(i)
 
     def set_period_values(self, period):
         period.add_start_date(self.period_start_date(period.index))
@@ -180,20 +223,107 @@ class PeriodicBorrowing(_Borrowing):
     def eop_principal(self, period):
         return period.bop_principal - period.principal_payment
 
-    def schedule(self):
-        """Returns the borrowing's cash flow schedule"""
+    def _schedule_periods(self):
         self._start_caching()
-        schedule = []
+        periods = []
 
         i = 0
         while self.period_end_date(i) is not None:
             p = self.period(i)
-            schedule.append(p.schedule())
+            periods.append(p)
             i += 1
 
-        df = pd.DataFrame(schedule).set_index('index')
         self._stop_caching()
+        return periods
+
+    def schedule(self):
+        """Returns the borrowing's cash flow schedule"""
+        periods = self._schedule_periods()
+        schedule = [p.schedule() for p in periods]
+        df = pd.DataFrame(schedule).set_index('index')
         return df
+
+    def accrued(self, dt, attr):
+        """
+        Returns the accrued value for the attr parameter. `attr` must be a period schedule attribute. Returns the amount
+        accrued from and including the corresponding period start date to and excludind the date parameter. Uses the
+        loan's `year_frac` method to determine the percent accrued.
+
+        Parameters
+        ----------
+        dt: datetime-like
+            Date to accrue to (but not include)
+        attr: str
+            Name of the period attribute to calculate the accrued amount
+
+        Returns
+        -------
+        float
+        """
+        i = self.date_index(dt)
+        p = self.period(i)
+
+        amt = p.__getattribute__(attr)
+        percent_frac = self.year_frac(p.start_date, dt) / self.year_frac(p.start_date, p.end_date)
+
+        return amt * percent_frac
+
+    # TODO: Maybe collapse into accrued with bool arg for unpaid=False
+    def accrued_and_unpaid(self, dt, attr):
+        """
+        Returns the accrued but unpaid amount of the attribute to but excluding the date parameter. Assumes that amounts
+        accrued over an interest period are fulled paid on the period's payment date.
+
+        Parameters
+        ----------
+        dt: datetime-like
+            Date to accrue to (but not include)
+        attr: str
+            Name of the period attribute to calculate the accrued amount
+
+        Returns
+        -------
+        float
+        """
+        dt_i = self.date_index(dt)
+        periods = self._schedule_periods()
+        paid = 0
+        accrued = 0
+
+        for p in periods[0:dt_i + 1]:
+            if p.payment_date <= dt:
+                paid += p.__getattribute__(attr)
+            if p.index < dt_i:
+                accrued += p.__getattribute__(attr)
+            elif p.index == dt_i:
+                accrued += self.accrued(dt, attr)
+
+        return accrued - paid
+
+    def accrued_interest(self, dt, int_attr='interest_payment'):
+        """Convenience method for calculating accrued interest. Calls `accrued` with default attribute name
+        `interest_payment`."""
+        return self.accrued(dt, int_attr)
+
+    # TODO: make robust to period property changes
+    def outstanding_amount(self, dt):
+        """
+        Returns the scheduled outstanding amount for a given date based on interest period start and end dates (i.e.
+        does not consider payment dates).
+
+        Parameters
+        ----------
+        dt: datetime-like
+            As of date
+
+        Returns
+        -------
+        float
+        """
+        dt_i = self.date_index(dt)
+        if dt == self.end_date:
+            return self.period(dt_i).eop_principal
+        return self.period(dt_i).outstanding_principal()
 
 
 class FixedRateBorrowing(PeriodicBorrowing):

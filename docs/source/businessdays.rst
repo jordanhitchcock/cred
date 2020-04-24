@@ -22,6 +22,6 @@ Date Adjustment Conventions
 
 .. autofunction:: cred.following
 
-.. autofunction:: cred.preceeding
+.. autofunction:: cred.preceding
 
 

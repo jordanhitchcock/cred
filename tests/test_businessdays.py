@@ -3,7 +3,7 @@ from dateutil.relativedelta import relativedelta
 import pytest
 from pandas.tseries.holiday import USFederalHolidayCalendar, AbstractHolidayCalendar, Holiday
 
-from cred.businessdays import is_observed_holiday, preceeding, following, \
+from cred.businessdays import is_observed_holiday, preceding, following, \
     modified_following, unadjusted, is_month_end, Monthly
 
 
@@ -17,9 +17,7 @@ def holiday_calendar():
             Holiday('hol3', month=3, day=31),
             Holiday('hol4', month=8, day=31)
         ]
-
     return Hol_Cal()
-
 
 @pytest.mark.parametrize(
     'dt,calendar,expected',
@@ -48,8 +46,8 @@ def test_is_observed_holiday(dt, calendar, expected):
         (date(2015, 12, 25), USFederalHolidayCalendar(), date(2015, 12, 24))  # Friday holiday
     ]
 )
-def test_preceeding(dt, calendar, expected):
-    assert preceeding(dt, calendar) == expected
+def test_preceding(dt, calendar, expected):
+    assert preceding(dt, calendar) == expected
 
 
 @pytest.mark.parametrize(

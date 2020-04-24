@@ -51,7 +51,7 @@ def is_month_end(dt):
     return dt.day == cal.monthrange(dt.year, dt.month)[1]
 
 
-def preceeding(dt, calendar):
+def preceding(dt, calendar):
     """
     Return the previous business day if `dt` is on a weekend or holiday in `calendar`.
     """
@@ -79,7 +79,7 @@ def modified_following(dt, calendar):
     if following_bd.month == dt.month:
         return following_bd
     else:
-        return preceeding(dt, calendar)
+        return preceding(dt, calendar)
 
 
 def unadjusted(dt, calendar=None):

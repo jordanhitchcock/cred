@@ -90,6 +90,7 @@ class InterestPeriod(Period):
     Period type used by PeriodicBorrowing and its subclasses.
     """
     # TODO: add better documentation for the date methods
+    # TODO: fix naming v always have .start_date, pmt_date, et.
 
     def __init__(self, i):
         super().__init__(i)
@@ -110,5 +111,7 @@ class InterestPeriod(Period):
     def add_pmt_date(self, dt, name=PAYMENT_DATE):
         self.pmt_date_col = name
         self.schedule_cols.append(name)
-        self.__setattr__(name, dt)
+        if not hasattr(self, 'pmt_date'):
+            self.__setattr__(name, dt)
+
 

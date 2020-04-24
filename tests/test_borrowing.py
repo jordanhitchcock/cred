@@ -164,6 +164,67 @@ def test_fixed_io_start_and_end_stubs_schedule(fixed_io_start_and_end_stubs):
     pd.testing.assert_frame_equal(expected_start_and_end_stub, fixed_io_start_and_end_stubs.schedule())
 
 
+def test_date_index_no_stubs(fixed_io_no_stubs):
+    assert fixed_io_no_stubs.date_index(datetime(2020, 1, 1)) == 0  # borrowing start date
+    assert fixed_io_no_stubs.date_index(datetime(2020, 1, 2)) == 0
+    assert fixed_io_no_stubs.date_index(datetime(2020, 1, 31)) == 0
+    assert fixed_io_no_stubs.date_index(datetime(2020, 2, 1)) == 1
+    assert fixed_io_no_stubs.date_index(datetime(2021, 12, 31)) == 23
+    assert fixed_io_no_stubs.date_index(datetime(2022, 1, 1)) == 23  # borrowing end date
+    with pytest.raises(Exception):
+        fixed_io_no_stubs.date_index(datetime(2019, 12, 31))  # before borrowing start date
+    with pytest.raises(Exception):
+        fixed_io_no_stubs.date_index(datetime(2022, 1, 2))  # after borrowing end date
+
+
+def test_date_index_start_stub(fixed_io_start_stub):
+    assert fixed_io_start_stub.date_index(datetime(2020, 1, 16)) == 0  # borrowing start date
+    assert fixed_io_start_stub.date_index(datetime(2020, 1, 18)) == 0
+    assert fixed_io_start_stub.date_index(datetime(2020, 1, 31)) == 0
+    assert fixed_io_start_stub.date_index(datetime(2020, 2, 1)) == 1
+    assert fixed_io_start_stub.date_index(datetime(2021, 12, 31)) == 23
+    assert fixed_io_start_stub.date_index(datetime(2022, 1, 1)) == 23  # borrowing end date
+    with pytest.raises(Exception):
+        fixed_io_start_stub.date_index(datetime(2020, 1, 1))  # before borrowing start date
+    with pytest.raises(Exception):
+        fixed_io_start_stub.date_index(datetime(2022, 1, 2))  # after borrowing end date
+
+
+def test_date_index_end_stub(fixed_io_end_stub):
+    assert fixed_io_end_stub.date_index(datetime(2020, 1, 1)) == 0  # borrowing start date
+    assert fixed_io_end_stub.date_index(datetime(2020, 1, 18)) == 0
+    assert fixed_io_end_stub.date_index(datetime(2020, 1, 31)) == 0
+    assert fixed_io_end_stub.date_index(datetime(2020, 2, 1)) == 1
+    assert fixed_io_end_stub.date_index(datetime(2021, 12, 31)) == 23
+    assert fixed_io_end_stub.date_index(datetime(2022, 1, 1)) == 24
+    assert fixed_io_end_stub.date_index(datetime(2022, 1, 16)) == 24
+    with pytest.raises(Exception):
+        fixed_io_end_stub.date_index(datetime(2019, 12, 31))  # before borrowing start date
+    with pytest.raises(Exception):
+        fixed_io_end_stub.date_index(datetime(2022, 1, 17))  # after borrowing end date
+
+
+def test_date_index_start_and_end_stubs(fixed_io_start_and_end_stubs):
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 1, 16)) == 0  # borrowing start date
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 1, 18)) == 0
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 1, 31)) == 0
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 2, 1)) == 1
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2021, 12, 31)) == 23
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 1)) == 24
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 16)) == 24
+    with pytest.raises(IndexError):
+        fixed_io_start_and_end_stubs.date_index(datetime(2019, 12, 31))  # before borrowing start date
+    with pytest.raises(Exception):
+        fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 17))  # after borrowing end date
+    # one day stub periods
+    fixed_io_start_and_end_stubs.start_date = datetime(2020, 1, 31)
+    fixed_io_start_and_end_stubs.end_date = datetime(2022, 1, 2)
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 1, 31)) == 0
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2020, 2, 1)) == 1
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 1)) == 24
+    assert fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 2)) == 24
+
+
 # Fixed rate with constant payment amortization
 @pytest.fixture
 def fixed_constant_amort_no_stubs():
@@ -343,4 +404,39 @@ def test_fixed_amortizing_custom_start_and_end_stubs(fixed_amortizing_custom_sta
                                     parse_dates=[1, 2, 3])
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_custom_start_and_end_stubs.schedule())
 
+
+# Test accrued interest
+def test_accrued(fixed_constant_amort_start_and_end_stubs):
+    fixed_constant_amort_start_and_end_stubs.io_periods = 6
+    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 2), 'interest_payment') == pytest.approx(0.0)
+    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 17), 'interest_payment') == pytest.approx(5000.0)
+    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 6, 1), 'interest_payment') == pytest.approx(0.0)
+    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 12, 15), 'interest_payment') == pytest.approx(4652.66240004073)
+    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2021, 12, 2), 'interest_payment') == pytest.approx(328.9536160567391)
+    with pytest.raises(IndexError):
+        fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 1), 'interest_payment')
+    with pytest.raises(IndexError):
+        fixed_constant_amort_start_and_end_stubs.accrued(datetime(2021, 12, 3), 'interest_payment')
+
+
+def test_accrued_and_unpaid(fixed_io_start_and_end_stubs):
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 16), 'interest_payment') == pytest.approx(-5333.33333333333)  # start stub prepaid
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 17), 'interest_payment') == pytest.approx(-5000.0)  # start stub prepaid
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 2, 1), 'interest_payment') == pytest.approx(0.0)
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 2, 15), 'interest_payment') == pytest.approx(4666.66666666667)
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 3, 1), 'interest_payment') == pytest.approx(9666.66666666667)  # pmt date 3/2
+    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2022, 1, 16), 'interest_payment') == pytest.approx(5000.0)  # maturity date
+    with pytest.raises(IndexError):
+        fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 15), 'interest_payment')
+    # TODO: raises index error if dt is after the last period end date but before the last period payment date
+
+
+# Test outstanding balance
+def test_outstanding_amount(fixed_constant_amort_start_and_end_stubs):
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 2)) == pytest.approx(1000000.0)  # closing date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 15)) == pytest.approx(1000000.0)
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 3, 1)) == pytest.approx(998760.225513185)  # period end date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2021, 12, 2)) == pytest.approx(0.0)  # maturity date
+    with pytest.raises(IndexError):
+        fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 1))
 
