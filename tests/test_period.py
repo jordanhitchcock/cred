@@ -13,28 +13,12 @@ def interest_period():
     return InterestPeriod(0)
 
 
-def test_outstanding_principal(period):
-    assert period.outstanding_principal() == 0
-    period.add_balance(9, 'bop_principal')
-    assert period.outstanding_principal() == 9
-    period.add_balance(4, 'draws')
-    assert period.outstanding_principal() == 13
-
-
-def test_balance_cols(period):
-    assert period.balance_cols == []
-    period.add_balance(9, 'bop_principal')
-    assert period.balance_cols == ['bop_principal']
-    period.add_balance(4, 'draws')
-    assert period.balance_cols == ['bop_principal', 'draws']
-
-
 def test_payment(period):
-    assert period.payment() == 0
+    assert period.get_payment() == 0
     period.add_payment(9, 'interest')
-    assert period.payment() == 9
+    assert period.get_payment() == 9
     period.add_payment(4, 'principal')
-    assert period.payment() == 13
+    assert period.get_payment() == 13
 
 
 def test_payment_cols(period):
@@ -56,15 +40,13 @@ def test_schedule_cols(period):
     assert period.schedule_cols == ['index']
     period.add_display_field(0.03, 'interest_rate')
     assert period.schedule_cols == ['index', 'interest_rate']
-    period.add_balance(100, 'bop_principal')
-    assert period.schedule_cols == ['index', 'interest_rate', 'bop_principal']
     period.add_payment(3, 'interest_payment')
-    assert period.schedule_cols == ['index', 'interest_rate', 'bop_principal', 'interest_payment']
+    assert period.schedule_cols == ['index', 'interest_rate', 'interest_payment']
 
 
 def test_schedule(period):
     assert period.schedule() == {'index': 0}
-    period.add_balance(100, 'bop_principal')
+    period.add_display_field(100, 'bop_principal')
     period.add_display_field(0.05, 'interest_rate')
     period.add_payment(5, 'interest_payment')
     assert period.schedule() == {
@@ -86,7 +68,7 @@ def test_interest_period_attributes(interest_period):
 
 def test_interest_period_schedule(interest_period):
     assert interest_period.schedule() == {'index': 0}
-    interest_period.add_balance(100, 'bop_principal')
+    interest_period.add_display_field(100, 'bop_principal')
     interest_period.add_display_field(0.05, 'interest_rate')
     interest_period.add_payment(5, 'interest_payment')
     assert interest_period.schedule() == {

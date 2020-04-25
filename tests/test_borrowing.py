@@ -17,7 +17,6 @@ def borrowing():
 def simple_borrowing_subclass():
     class SubBorrowing(_Borrowing):
         def set_period_values(self, period):
-            period.add_balance(100, 'bop_principal')
             period.add_display_field(0.09, 'interest_rate')
             period.add_payment(9, 'interest')
             return period
@@ -61,11 +60,9 @@ def test_set_period_values(borrowing, simple_borrowing_subclass):
         borrowing.set_period_values(0)
 
     p = simple_borrowing_subclass.period(0)
-    assert p.outstanding_principal() == 100
-    assert p.payment() == 9
+    assert p.get_payment() == 9
     assert p.schedule() == {
         'index': 0,
-        'bop_principal': 100,
         'interest_rate': 0.09,
         'interest': 9
     }
@@ -405,38 +402,62 @@ def test_fixed_amortizing_custom_start_and_end_stubs(fixed_amortizing_custom_sta
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_custom_start_and_end_stubs.schedule())
 
 
-# Test accrued interest
-def test_accrued(fixed_constant_amort_start_and_end_stubs):
-    fixed_constant_amort_start_and_end_stubs.io_periods = 6
-    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 2), 'interest_payment') == pytest.approx(0.0)
-    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 17), 'interest_payment') == pytest.approx(5000.0)
-    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 6, 1), 'interest_payment') == pytest.approx(0.0)
-    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 12, 15), 'interest_payment') == pytest.approx(4652.66240004073)
-    assert fixed_constant_amort_start_and_end_stubs.accrued(datetime(2021, 12, 2), 'interest_payment') == pytest.approx(328.9536160567391)
-    with pytest.raises(IndexError):
-        fixed_constant_amort_start_and_end_stubs.accrued(datetime(2020, 1, 1), 'interest_payment')
-    with pytest.raises(IndexError):
-        fixed_constant_amort_start_and_end_stubs.accrued(datetime(2021, 12, 3), 'interest_payment')
-
-
-def test_accrued_and_unpaid(fixed_io_start_and_end_stubs):
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 16), 'interest_payment') == pytest.approx(-5333.33333333333)  # start stub prepaid
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 17), 'interest_payment') == pytest.approx(-5000.0)  # start stub prepaid
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 2, 1), 'interest_payment') == pytest.approx(0.0)
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 2, 15), 'interest_payment') == pytest.approx(4666.66666666667)
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 3, 1), 'interest_payment') == pytest.approx(9666.66666666667)  # pmt date 3/2
-    assert fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2022, 1, 16), 'interest_payment') == pytest.approx(5000.0)  # maturity date
-    with pytest.raises(IndexError):
-        fixed_io_start_and_end_stubs.accrued_and_unpaid(datetime(2020, 1, 15), 'interest_payment')
-    # TODO: raises index error if dt is after the last period end date but before the last period payment date
+def test_accrued_unpaid_int(fixed_io_start_and_end_stubs):
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 1, 16)) == pytest.approx(-5333.33333333333)  # start stub prepaid
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 1, 17)) == pytest.approx(-5000.0)  # start stub prepaid
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 2, 1)) == pytest.approx(0.0)
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 2, 15)) == pytest.approx(4666.66666666667)
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 3, 1)) == pytest.approx(9666.66666666667)  # pmt date 3/2
+    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2022, 1, 16)) == pytest.approx(5000.0)  # maturity date
 
 
 # Test outstanding balance
-def test_outstanding_amount(fixed_constant_amort_start_and_end_stubs):
-    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 2)) == pytest.approx(1000000.0)  # closing date
-    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 15)) == pytest.approx(1000000.0)
-    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 3, 1)) == pytest.approx(998760.225513185)  # period end date
-    assert fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2021, 12, 2)) == pytest.approx(0.0)  # maturity date
-    with pytest.raises(IndexError):
-        fixed_constant_amort_start_and_end_stubs.outstanding_amount(datetime(2020, 1, 1))
+def test_outstanding_principal(fixed_constant_amort_start_and_end_stubs):
+    fixed_constant_amort_start_and_end_stubs.holidays = FederalReserveHolidays()
+    fixed_constant_amort_start_and_end_stubs.adjust_pmt_date = modified_following
+    fixed_constant_amort_start_and_end_stubs.end_date = datetime(2021, 12, 5)
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 1)) == pytest.approx(0.0)  # after final pmt date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 2)) == pytest.approx(1000000.0)  # closing date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 15)) == pytest.approx(1000000.0)
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 3, 1)) == pytest.approx(1000000.0)  # period end date with pmt 3/2
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 3, 2)) == pytest.approx(998760.225513185)  # period end date with pmt 3/2
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 5)) == pytest.approx(981090.953492929)  # maturity date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 6)) == pytest.approx(0.0)  # final pmt date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 7)) == pytest.approx(0.0)  # after final pmt date
 
+
+def test_payments_scheduled_dt(fixed_constant_amort_start_and_end_stubs):
+    expected_schedule = pd.read_csv('tests/data/test_fixed_constant_amort_start_and_end_stubs.csv',
+                                    index_col='index',
+                                    parse_dates=[1, 2, 3])
+    expected_dates = expected_schedule['end_date'].dt.to_pydatetime()
+    full_expected_output = list(zip(expected_dates, expected_schedule['payment']))
+    assert fixed_constant_amort_start_and_end_stubs.payments(datetime(2020, 1, 1), datetime(2020, 1, 1)) == []
+    assert fixed_constant_amort_start_and_end_stubs.payments(datetime(2020, 1, 2), datetime(2020, 1, 2)) == []
+    # Convert to Series/DF and compare due to issues with floats
+    pd.testing.assert_series_equal(
+        pd.Series(fixed_constant_amort_start_and_end_stubs.payments(datetime(2020, 1, 1), datetime(2020, 2, 1))[0]),
+        pd.Series(full_expected_output[0]))
+    pd.testing.assert_frame_equal(
+        pd.DataFrame(fixed_constant_amort_start_and_end_stubs.payments(datetime(2020, 2, 29), datetime(2020, 5, 1))),
+        pd.DataFrame(full_expected_output[1:4]))
+    pd.testing.assert_frame_equal(
+        pd.DataFrame(fixed_constant_amort_start_and_end_stubs.payments(None, datetime(2020, 5, 1))),
+        pd.DataFrame(full_expected_output[:4]))
+    pd.testing.assert_frame_equal(
+        pd.DataFrame(fixed_constant_amort_start_and_end_stubs.payments(datetime(2020, 5, 1), None)),
+        pd.DataFrame(full_expected_output[3:]))
+    assert fixed_constant_amort_start_and_end_stubs.payments(None, datetime(2020, 1, 1)) == []
+    assert fixed_constant_amort_start_and_end_stubs.payments(datetime(2025, 1, 1), None) == []
+
+
+def test_payments_pmt_dt(fixed_io_start_and_end_stubs):
+    expected_schedule = pd.read_csv('tests/data/test_fixed_io_schedule_start_and_end_stubs.csv',
+                                              index_col='index',
+                                              parse_dates=[1, 2, 3])
+    expected_dates = expected_schedule['payment_date'].dt.to_pydatetime()
+    full_expected_output = list(zip(expected_dates, expected_schedule['payment']))
+    assert fixed_io_start_and_end_stubs.payments(datetime(2020, 1, 1), datetime(2020, 1, 1), pmt_dt=True) == []
+    pd.testing.assert_series_equal(
+        pd.Series(fixed_io_start_and_end_stubs.payments(datetime(2020, 1, 16), datetime(2020, 1, 16), pmt_dt=True)[0]),
+        pd.Series(full_expected_output[0]))
