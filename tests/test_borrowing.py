@@ -461,3 +461,11 @@ def test_payments_pmt_dt(fixed_io_start_and_end_stubs):
     pd.testing.assert_series_equal(
         pd.Series(fixed_io_start_and_end_stubs.payments(datetime(2020, 1, 16), datetime(2020, 1, 16), pmt_dt=True)[0]),
         pd.Series(full_expected_output[0]))
+
+
+# Test prepayment
+def test_set_ppmt_custom(fixed_io_no_stubs):
+    fixed_io_no_stubs.set_ppmt_custom(sum)
+    assert fixed_io_no_stubs.repayment_amount.__name__ == 'sum'
+    fixed_io_no_stubs.set_ppmt_custom(sum, {'test_val1': 1, 'test_val2': 2})
+    assert (fixed_io_no_stubs.repayment_amount.__name__ == 'sum') and (fixed_io_no_stubs.prepayment_attrs == )

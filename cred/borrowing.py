@@ -96,10 +96,14 @@ class PeriodicBorrowing(_Borrowing):
     year_frac: function
         Function that takes two dates and returns the year fraction between them. Bound to `Borrowing.year_frac`.
         Default function is `cred.interest.actual360`. Use `cred.interest.thrity360` for NASD 30 / 360 day count.
+    calc_convention: function, optional(default=cred.businessdays.unadjusted)
+        Business day adjustment method for interest calculation dates. Function that takes a date as its first argument
+        and a list of holidays as its second argument and returns the adjusted date. See `cred.businessdays.following`,
+        `preceding`, and `modified_following`. Assigned to `adjust_calc_date'.
     pmt_convention: function, optional(default=cred.businessdays.unadjusted)
-        Function that takes a date as its first argument and a list of holidays as its second argument and returns the
-        adjusted date. See `cred.businessdays.following`, `preceding`, and `modified_following`.
-        Bound to `adjust_pmt_date'.
+        Business day adjustment method for payment dates. Function that takes a date as its first argument and a list of
+        holidays as its second argument and returns the adjusted date. See `cred.businessdays.following`, `preceding`,
+        and `modified_following`. Assigned to `adjust_pmt_date'.
     b_days: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
@@ -107,7 +111,7 @@ class PeriodicBorrowing(_Borrowing):
     """
 
     def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
-                 pmt_convention=unadjusted, holidays=None, desc=None):
+                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None):
 
         super().__init__(desc)
         self.period_type = InterestPeriod
@@ -120,8 +124,10 @@ class PeriodicBorrowing(_Borrowing):
         self.freq = freq
         self.initial_principal = initial_principal
         self.holidays = holidays
+        self.prepayment_attrs = None
 
         self.year_frac = year_frac
+        self.adjust_calc_date = calc_convention
         self.adjust_pmt_date = pmt_convention
 
     # Indexing and accessing values
@@ -249,7 +255,7 @@ class PeriodicBorrowing(_Borrowing):
             yf = min(self.year_frac(p.start_date, dt) / self.year_frac(p.start_date, p.end_date), 1)
             if dt >= p.start_date:
                 accrued += yf * p.get_interest_pmt()
-            if dt >= p.__getattribute__(p.pmt_date_col):
+            if dt >= p.get_pmt_date():
                 paid += p.get_interest_pmt()
 
         return accrued - paid
@@ -257,8 +263,8 @@ class PeriodicBorrowing(_Borrowing):
     def outstanding_principal(self, dt):
         """
         Returns the outstanding, unpaid balance taking payment dates into account. Returns the clean amount not
-        including any accrued interest. Returns 0 for dates prior to the start date and last period's beginning balance
-        principal payment for any date equal or greater than the final payment date.
+        including any accrued interest. Returns 0 for dates prior to the start date, and returns the last period's
+        beginning balance less principal payment for any date equal or greater than the final payment date.
 
         Parameters
         ----------
@@ -276,11 +282,11 @@ class PeriodicBorrowing(_Borrowing):
 
         for p in periods:
             if p.__getattribute__(p.pmt_date_col) > dt:
-                return p.__getattribute__(p.bop_principal_col)
+                return p.get_bop_principal()
 
         # dt after last payment date, return last period bop balance less last period principal payment
         p = periods[-1]
-        return p.__getattribute__(p.bop_principal_col) - p.get_principal_pmt()
+        return p.get_bop_principal() - p.get_principal_pmt()
 
     # Building the schedule
     def _schedule_periods(self):
@@ -326,16 +332,21 @@ class PeriodicBorrowing(_Borrowing):
         """Returns the calculation start date for period with index `i`."""
         # first period
         if i == 0:
-            return self.start_date
+            dt = self.start_date
         # beginning stub period
-        if self.start_date != self.first_reg_start:
-            return self.first_reg_start + self.freq * (i - 1)
+        elif self.start_date != self.first_reg_start:
+            dt = self.first_reg_start + self.freq * (i - 1)
         # not beginning stub period
-        return self.start_date + self.freq * i
+        else:
+            dt = self.start_date + self.freq * i
+
+        return self.adjust_calc_date(dt, self.holidays)
 
     def period_end_date(self, i):
-        """Returns end period calculation end date for period with index `i`. Returns `None` for indexes greater than
-        then number of interest periods in the loan."""
+        """
+        Returns end period calculation end date for period with index `i`. Returns `None` for indexes greater than
+        then number of interest periods in the loan.
+        """
         if self.start_date == self.first_reg_start:
             i += 1
 
@@ -343,13 +354,15 @@ class PeriodicBorrowing(_Borrowing):
 
         if end_dt > self.end_date + self.freq - relativedelta(days=1):
             return None
-        return min(end_dt, self.end_date)
+        return self.adjust_calc_date(min(end_dt, self.end_date), self.holidays)
 
     def pmt_date(self, i):
         """Returns the payment date for period with index `i`."""
         if (self.start_date != self.first_reg_start) and i == 0:
-            return self.period_start_date(i)
-        return self.adjust_pmt_date(self.period_end_date(i), self.holidays)
+            dt = self.period_start_date(i)
+        else:
+            dt = self.period_end_date(i)
+        return self.adjust_pmt_date(dt, self.holidays)
 
     def bop_principal(self, period):
         """Returns the beginning of interest period principal balance for the `InterestPeriod` argument."""
@@ -396,14 +409,24 @@ class PeriodicBorrowing(_Borrowing):
     def repayment_amount(self, dt):
         raise NotImplementedError('Must set prepayment before calling the repayment_amount method.')
 
-    def set_ppmt_custom(self, ppmt_func, **kwargs):
+    def set_ppmt_custom(self, ppmt_func, prepayment_attrs=None):
+        """
+        Sets the borrowing's `repayment_amount` to `ppmt_func` and assigns `prepayment_attrs` to the borrowing's
+        property with the same name.
+
+        `ppmt_func` should accept a PeriodicBorrowing as the first argument and a date as the second argument.
+
+
+        Parameters
+        ----------
+        ppmt_func
+            A function taking a `PeriodicBorrowing` as its first argument and a date as its second argument that returns
+            the total cost of repaying the borrowing as of the date.
+        prepayment_attrs: dict
+            Dictionary of additional borrowing attributes that are needed for repayment calculations
+        """
         self.repayment_amount = ppmt_func
-
-        for k, v in kwargs.items():
-            if hasattr(self, k):
-                raise ValueError(f'Borrowing already has an attribute called {k}, use a different name.')
-
-            self.__setattr__(k, v)
+        self.prepayment_attrs = prepayment_attrs
 
 
 class FixedRateBorrowing(PeriodicBorrowing):

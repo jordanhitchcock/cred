@@ -128,3 +128,6 @@ class InterestPeriod(Period):
     def get_principal_pmt(self):
         return sum([self.__getattribute__(n) for n in self.principal_pmt_cols])
 
+    def get_bop_principal(self):
+        return self.__getattribute__(self.bop_principal_col)
+
