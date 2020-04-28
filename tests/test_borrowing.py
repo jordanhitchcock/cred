@@ -468,4 +468,4 @@ def test_set_ppmt_custom(fixed_io_no_stubs):
     fixed_io_no_stubs.set_ppmt_custom(sum)
     assert fixed_io_no_stubs.repayment_amount.__name__ == 'sum'
     fixed_io_no_stubs.set_ppmt_custom(sum, {'test_val1': 1, 'test_val2': 2})
-    assert (fixed_io_no_stubs.repayment_amount.__name__ == 'sum') and (fixed_io_no_stubs.prepayment_attrs == )
+    assert (fixed_io_no_stubs.repayment_amount.__name__ == 'sum') and (fixed_io_no_stubs.prepayment_attrs == {'test_val1': 1, 'test_val2': 2})

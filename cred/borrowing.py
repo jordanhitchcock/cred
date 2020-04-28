@@ -108,10 +108,12 @@ class PeriodicBorrowing(_Borrowing):
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
         Optional borrowing description.
+    ppmt_calculator: BasePrepaymentCalculator
+        BasePrepaymentCalculator subclass that defines prepayment terms and calculates prepayment costs.
     """
 
     def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
-                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None):
+                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None, ppmt_calculator=None):
 
         super().__init__(desc)
         self.period_type = InterestPeriod
@@ -124,7 +126,7 @@ class PeriodicBorrowing(_Borrowing):
         self.freq = freq
         self.initial_principal = initial_principal
         self.holidays = holidays
-        self.prepayment_attrs = None
+        self.ppmt_calculator = ppmt_calculator
 
         self.year_frac = year_frac
         self.adjust_calc_date = calc_convention
@@ -265,6 +267,8 @@ class PeriodicBorrowing(_Borrowing):
         Returns the outstanding, unpaid balance taking payment dates into account. Returns the clean amount not
         including any accrued interest. Returns 0 for dates prior to the start date, and returns the last period's
         beginning balance less principal payment for any date equal or greater than the final payment date.
+
+        See `repayment_amount` for total cost to repay including any prepayment premiums.
 
         Parameters
         ----------
@@ -407,26 +411,11 @@ class PeriodicBorrowing(_Borrowing):
 
     # Prepayment
     def repayment_amount(self, dt):
-        raise NotImplementedError('Must set prepayment before calling the repayment_amount method.')
-
-    def set_ppmt_custom(self, ppmt_func, prepayment_attrs=None):
-        """
-        Sets the borrowing's `repayment_amount` to `ppmt_func` and assigns `prepayment_attrs` to the borrowing's
-        property with the same name.
-
-        `ppmt_func` should accept a PeriodicBorrowing as the first argument and a date as the second argument.
-
-
-        Parameters
-        ----------
-        ppmt_func
-            A function taking a `PeriodicBorrowing` as its first argument and a date as its second argument that returns
-            the total cost of repaying the borrowing as of the date.
-        prepayment_attrs: dict
-            Dictionary of additional borrowing attributes that are needed for repayment calculations
-        """
-        self.repayment_amount = ppmt_func
-        self.prepayment_attrs = prepayment_attrs
+        """Repayment amount including any prepayment premiums as defined by the `ppmt_calculator` object. See
+        `borrowing.outstanding_principal` for clean balance."""
+        if self.ppmt_calculator is None:
+            raise AttributeError('Must define a prepayment calculator attribute.')
+        return self.ppmt_calculator.repayment_amount(self, dt)
 
 
 class FixedRateBorrowing(PeriodicBorrowing):
