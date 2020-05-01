@@ -3,7 +3,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from cred import FixedRateBorrowing, actual360, following, unadjusted, preceding, FederalReserveHolidays
-from cred.ppmtcalculator import Defeasance, OpenPrepayment
+from cred.ppmtcalculator import OpenPrepayment
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def fixed_constant_amort_end_stub_unadjusted():
         coupon=0.12,
         amort_periods=250,
         year_frac=actual360,
-        holidays=FederalReserveHolidays(),
+        holiday_calendar=FederalReserveHolidays(),
         pmt_convention=unadjusted
     )
 
@@ -31,7 +31,7 @@ def fixed_constant_amort_end_stub_preceding():
         coupon=0.12,
         amort_periods=250,
         year_frac=actual360,
-        holidays=FederalReserveHolidays(),
+        holiday_calendar=FederalReserveHolidays(),
         pmt_convention=preceding
     )
 
@@ -46,7 +46,7 @@ def fixed_constant_amort_end_stub_following():
         coupon=0.12,
         amort_periods=250,
         year_frac=actual360,
-        holidays=FederalReserveHolidays(),
+        holiday_calendar=FederalReserveHolidays(),
         pmt_convention=following
     )
 

@@ -82,7 +82,7 @@ def fixed_io_no_stubs():
         amort_periods=None,
         year_frac=actual360,
         pmt_convention=modified_following,
-        holidays=FederalReserveHolidays()
+        holiday_calendar=FederalReserveHolidays()
     )
 
 
@@ -98,7 +98,7 @@ def fixed_io_start_stub():
         amort_periods=None,
         year_frac=actual360,
         pmt_convention=modified_following,
-        holidays=FederalReserveHolidays()
+        holiday_calendar=FederalReserveHolidays()
     )
 
 
@@ -113,7 +113,7 @@ def fixed_io_end_stub():
         amort_periods=None,
         year_frac=actual360,
         pmt_convention=modified_following,
-        holidays=FederalReserveHolidays()
+        holiday_calendar=FederalReserveHolidays()
     )
 
 
@@ -129,7 +129,7 @@ def fixed_io_start_and_end_stubs():
         amort_periods=None,
         year_frac=actual360,
         pmt_convention=modified_following,
-        holidays=FederalReserveHolidays()
+        holiday_calendar=FederalReserveHolidays()
     )
 
 
@@ -404,7 +404,7 @@ def test_fixed_amortizing_custom_start_and_end_stubs(fixed_amortizing_custom_sta
 
 # Test outstanding balance
 def test_outstanding_principal(fixed_constant_amort_start_and_end_stubs):
-    fixed_constant_amort_start_and_end_stubs.holidays = FederalReserveHolidays()
+    fixed_constant_amort_start_and_end_stubs.holiday_calendar = FederalReserveHolidays()
     fixed_constant_amort_start_and_end_stubs.adjust_pmt_date = modified_following
     fixed_constant_amort_start_and_end_stubs.end_date = datetime(2021, 12, 5)
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 1)) is None  # before start date

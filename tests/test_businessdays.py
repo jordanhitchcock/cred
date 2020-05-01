@@ -1,5 +1,4 @@
-from datetime import date
-from dateutil.relativedelta import relativedelta
+from datetime import date, datetime
 import pytest
 from pandas.tseries.holiday import USFederalHolidayCalendar, AbstractHolidayCalendar, Holiday
 
@@ -8,7 +7,7 @@ from cred.businessdays import is_observed_holiday, preceding, following, \
 
 
 @pytest.fixture
-def holiday_calendar():
+def custom_holidays():
     class Hol_Cal(AbstractHolidayCalendar):
         rules = [
             Holiday('hol1', month=1, day=9),
@@ -17,53 +16,60 @@ def holiday_calendar():
             Holiday('hol3', month=3, day=31),
             Holiday('hol4', month=8, day=31)
         ]
-    return Hol_Cal()
 
-@pytest.mark.parametrize(
-    'dt,calendar,expected',
-    [
-        (date(2015, 1, 1), USFederalHolidayCalendar(), True),  # falls on weekday, observed on weekday
-        (date(2015, 7, 3), USFederalHolidayCalendar(), True),  # observed for holiday that falls on weekend, observed on weekday
-        (date(2015, 7, 4), USFederalHolidayCalendar(), False),  # actual for holiday that falls on weekend, observed on weekday
-        (date(2011, 7, 5), USFederalHolidayCalendar(), False),  # weekday
-        (date(2011, 7, 6), USFederalHolidayCalendar(), False),  # weekend
-        (date(2020, 12, 31), None, False)  # calendar is None
-    ]
-)
-def test_is_observed_holiday(dt, calendar, expected):
-    assert is_observed_holiday(dt, calendar) == expected
+    return Hol_Cal().holidays(datetime(1970, 1, 1), datetime(2200, 1, 1))
+
+
+@pytest.fixture
+def fed_holidays():
+    return USFederalHolidayCalendar().holidays(datetime(1970, 1, 1), datetime(2200, 1, 1))
 
 
 @pytest.mark.parametrize(
-    'dt,calendar,expected',
+    'dt,expected',
     [
-        (date(2015, 1, 2), USFederalHolidayCalendar(), date(2015, 1, 2)),  # holiday
-        (date(2015, 6, 27), USFederalHolidayCalendar(), date(2015, 6, 26)),  # Saturday
-        (date(2015, 6, 28), USFederalHolidayCalendar(), date(2015, 6, 26)),  # Sunday
-        (date(2015, 7, 5), USFederalHolidayCalendar(), date(2015, 7, 2)),  # weekend holiday
-        (date(2015, 9, 7), USFederalHolidayCalendar(), date(2015, 9, 4)),  # Monday holiday
-        (date(2015, 11, 11), USFederalHolidayCalendar(), date(2015, 11, 10)),  # Wednesday holiday
-        (date(2015, 12, 25), USFederalHolidayCalendar(), date(2015, 12, 24))  # Friday holiday
+        (date(2015, 1, 1), True),  # falls on weekday, observed on weekday
+        (date(2015, 7, 3), True),  # observed for holiday that falls on weekend, observed on weekday
+        (date(2015, 7, 4), False),  # actual for holiday that falls on weekend, observed on weekday
+        (date(2011, 7, 5), False),  # weekday
+        (date(2011, 7, 6), False),  # weekend
+        (date(2020, 12, 31), False)  # calendar is None
     ]
 )
-def test_preceding(dt, calendar, expected):
-    assert preceding(dt, calendar) == expected
+def test_is_observed_holiday(dt, expected, fed_holidays):
+    assert is_observed_holiday(dt, fed_holidays) == expected
 
 
 @pytest.mark.parametrize(
-    'dt,calendar,expected',
+    'dt,expected',
     [
-        (date(2015, 1, 2), USFederalHolidayCalendar(), date(2015, 1, 2)),  # holiday
-        (date(2015, 6, 27), USFederalHolidayCalendar(), date(2015, 6, 29)),  # Saturday
-        (date(2015, 6, 28), USFederalHolidayCalendar(), date(2015, 6, 29)),  # Sunday
-        (date(2015, 7, 5), USFederalHolidayCalendar(), date(2015, 7, 6)),  # weekend holiday
-        (date(2015, 9, 7), USFederalHolidayCalendar(), date(2015, 9, 8)),  # Monday holiday
-        (date(2015, 11, 11), USFederalHolidayCalendar(), date(2015, 11, 12)),  # Wednesday holiday
-        (date(2015, 12, 25), USFederalHolidayCalendar(), date(2015, 12, 28))  # Friday holiday
+        (date(2015, 1, 2), date(2015, 1, 2)),  # holiday
+        (date(2015, 6, 27), date(2015, 6, 26)),  # Saturday
+        (date(2015, 6, 28), date(2015, 6, 26)),  # Sunday
+        (date(2015, 7, 5), date(2015, 7, 2)),  # weekend holiday
+        (date(2015, 9, 7), date(2015, 9, 4)),  # Monday holiday
+        (date(2015, 11, 11), date(2015, 11, 10)),  # Wednesday holiday
+        (date(2015, 12, 25), date(2015, 12, 24))  # Friday holiday
     ]
 )
-def test_following(dt, calendar, expected):
-    assert following(dt, calendar) == expected
+def test_preceding(dt, expected, fed_holidays):
+    assert preceding(dt, fed_holidays) == expected
+
+
+@pytest.mark.parametrize(
+    'dt,expected',
+    [
+        (date(2015, 1, 2), date(2015, 1, 2)),  # holiday
+        (date(2015, 6, 27), date(2015, 6, 29)),  # Saturday
+        (date(2015, 6, 28), date(2015, 6, 29)),  # Sunday
+        (date(2015, 7, 5), date(2015, 7, 6)),  # weekend holiday
+        (date(2015, 9, 7), date(2015, 9, 8)),  # Monday holiday
+        (date(2015, 11, 11), date(2015, 11, 12)),  # Wednesday holiday
+        (date(2015, 12, 25), date(2015, 12, 28))  # Friday holiday
+    ]
+)
+def test_following(dt, expected, fed_holidays):
+    assert following(dt, fed_holidays) == expected
 
 
 @pytest.mark.parametrize(
@@ -82,8 +88,8 @@ def test_following(dt, calendar, expected):
         (date(2024, 2, 29), date(2024, 2, 29)),  # eom feb 29 good bd
     ]
 )
-def test_modified_following(pmt_date, expected, holiday_calendar):
-    assert modified_following(pmt_date, holiday_calendar) == expected
+def test_modified_following(pmt_date, expected, custom_holidays):
+    assert modified_following(pmt_date, holidays=custom_holidays) == expected
 
 
 @pytest.mark.parametrize(
@@ -94,10 +100,13 @@ def test_modified_following(pmt_date, expected, holiday_calendar):
         (date(2020, 2, 29), date(2020, 2, 29))
     ]
 )
-def test_unadjusted(dt, expected):
+def test_unadjusted(dt, expected, fed_holidays):
     assert unadjusted(dt) == expected
-    assert unadjusted(dt, calendar=9) == expected
+    assert unadjusted(dt, holidays=fed_holidays) == expected
 
+
+
+#####
 
 @pytest.mark.parametrize(
     'dt,expected',

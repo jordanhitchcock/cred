@@ -1,5 +1,6 @@
 import itertools
 
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 import pandas as pd
@@ -104,7 +105,7 @@ class PeriodicBorrowing(_Borrowing):
         Business day adjustment method for payment dates. Function that takes a date as its first argument and a list of
         holidays as its second argument and returns the adjusted date. See `cred.businessdays.following`, `preceding`,
         and `modified_following`. Assigned to `adjust_pmt_date'.
-    b_days: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
+    holiday_calendar: pandas.tseries.holiday.AbstractHolidayCalendar, optional(default=None)
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
         Optional borrowing description.
@@ -113,7 +114,8 @@ class PeriodicBorrowing(_Borrowing):
     """
 
     def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
-                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None, prepayment=None):
+                 calc_convention=unadjusted, pmt_convention=unadjusted, holiday_calendar=None, desc=None,
+                 prepayment=None):
 
         super().__init__(desc)
         self.period_type = InterestPeriod
@@ -125,12 +127,28 @@ class PeriodicBorrowing(_Borrowing):
         self.end_date = end_date
         self.freq = freq
         self.initial_principal = initial_principal
-        self.holidays = holidays
         self.prepayment = prepayment
+        self._set_holiday_calendar(holiday_calendar)
 
         self.year_frac = year_frac
         self.adjust_calc_date = calc_convention
         self.adjust_pmt_date = pmt_convention
+
+    def _get_holiday_calendar(self):
+        return self._holiday_calendar
+
+    def _set_holiday_calendar(self, calendar):
+        if calendar is None:
+            self._holidays = None
+        else:
+            self._holidays = calendar.holidays(datetime(1970, 1, 1), datetime(2200, 1, 1))
+        self._holiday_calendar = calendar
+
+    holiday_calendar = property(_get_holiday_calendar, _set_holiday_calendar)
+
+    @property
+    def holidays(self):
+        return self._holidays
 
     # Indexing and accessing values
     def date_period(self, dt, inc_period_end=False):

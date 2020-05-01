@@ -39,11 +39,11 @@ class LondonBankHolidays(AbstractHolidayCalendar):
     ]
 
 
-def is_observed_holiday(dt, calendar):
-    """ Return True if dt is a holiday in calendar. Return `False` if `calendar` is `None`."""
-    if calendar is None:
+def is_observed_holiday(dt, holidays):
+    """ Return True if dt is a in `holidays`. Return `False` if `holidays` is `None`."""
+    if holidays is None:
         return False
-    return dt in calendar.holidays(start=dt, end=dt, return_name=False)
+    return dt in holidays
 
 
 def is_month_end(dt):
@@ -51,38 +51,38 @@ def is_month_end(dt):
     return dt.day == cal.monthrange(dt.year, dt.month)[1]
 
 
-def preceding(dt, calendar):
+def preceding(dt, holidays):
     """
-    Return the previous business day if `dt` is on a weekend or holiday in `calendar`.
+    Return the previous business day if `dt` is on a weekend or a date in `holidays`.
     """
-    while dt.weekday() > 4 or is_observed_holiday(dt, calendar):
+    while dt.weekday() > 4 or is_observed_holiday(dt, holidays):
         dt -= timedelta(days=1)
     return dt
 
 
-def following(dt, calendar):
+def following(dt, holidays):
     """
-    Return the next business day if `dt` is on a weekend or holiday in `calendar`.
+    Return the next business day if `dt` is on a weekend or a date in `holidays`.
     """
-    while dt.weekday() > 4 or is_observed_holiday(dt, calendar):
+    while dt.weekday() > 4 or is_observed_holiday(dt, holidays):
         dt += timedelta(days=1)
     return dt
 
 
-def modified_following(dt, calendar):
+def modified_following(dt, holidays):
     """
-    Return the next business day if `dt` is on a weekend or holiday in `calendar` unless the next business
+    Return the next business day if `dt` is on a weekend or holiday in `holidays` unless the next business
     day is in the following calendar month, in which case returns the previous business day.
     """
-    following_bd = following(dt, calendar)
+    following_bd = following(dt, holidays)
 
     if following_bd.month == dt.month:
         return following_bd
     else:
-        return preceding(dt, calendar)
+        return preceding(dt, holidays)
 
 
-def unadjusted(dt, calendar=None):
+def unadjusted(dt, holidays=None):
     """Return unadjusted date. `calendar` parameter does not affect return value, provides consistency with
     other convention functions."""
     return dt
