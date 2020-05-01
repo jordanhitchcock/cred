@@ -168,10 +168,10 @@ def test_date_index_no_stubs(fixed_io_no_stubs):
     assert fixed_io_no_stubs.date_index(datetime(2020, 2, 1)) == 1
     assert fixed_io_no_stubs.date_index(datetime(2021, 12, 31)) == 23
     assert fixed_io_no_stubs.date_index(datetime(2022, 1, 1)) == 23  # borrowing end date
-    with pytest.raises(Exception):
+    with pytest.raises(IndexError):
         fixed_io_no_stubs.date_index(datetime(2019, 12, 31))  # before borrowing start date
-    with pytest.raises(Exception):
-        fixed_io_no_stubs.date_index(datetime(2022, 1, 2))  # after borrowing end date
+    with pytest.raises(IndexError):
+        fixed_io_no_stubs.date_index(datetime(2022, 1, 4))  # after final pmt date
 
 
 def test_date_index_start_stub(fixed_io_start_stub):
@@ -181,10 +181,10 @@ def test_date_index_start_stub(fixed_io_start_stub):
     assert fixed_io_start_stub.date_index(datetime(2020, 2, 1)) == 1
     assert fixed_io_start_stub.date_index(datetime(2021, 12, 31)) == 23
     assert fixed_io_start_stub.date_index(datetime(2022, 1, 1)) == 23  # borrowing end date
-    with pytest.raises(Exception):
+    with pytest.raises(IndexError):
         fixed_io_start_stub.date_index(datetime(2020, 1, 1))  # before borrowing start date
-    with pytest.raises(Exception):
-        fixed_io_start_stub.date_index(datetime(2022, 1, 2))  # after borrowing end date
+    with pytest.raises(IndexError):
+        fixed_io_start_stub.date_index(datetime(2022, 1, 4))  # after final pmt date
 
 
 def test_date_index_end_stub(fixed_io_end_stub):
@@ -195,10 +195,10 @@ def test_date_index_end_stub(fixed_io_end_stub):
     assert fixed_io_end_stub.date_index(datetime(2021, 12, 31)) == 23
     assert fixed_io_end_stub.date_index(datetime(2022, 1, 1)) == 24
     assert fixed_io_end_stub.date_index(datetime(2022, 1, 16)) == 24
-    with pytest.raises(Exception):
+    with pytest.raises(IndexError):
         fixed_io_end_stub.date_index(datetime(2019, 12, 31))  # before borrowing start date
-    with pytest.raises(Exception):
-        fixed_io_end_stub.date_index(datetime(2022, 1, 17))  # after borrowing end date
+    with pytest.raises(IndexError):
+        fixed_io_end_stub.date_index(datetime(2022, 1, 19))  # after final pmt dt
 
 
 def test_date_index_start_and_end_stubs(fixed_io_start_and_end_stubs):
@@ -211,8 +211,8 @@ def test_date_index_start_and_end_stubs(fixed_io_start_and_end_stubs):
     assert fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 16)) == 24
     with pytest.raises(IndexError):
         fixed_io_start_and_end_stubs.date_index(datetime(2019, 12, 31))  # before borrowing start date
-    with pytest.raises(Exception):
-        fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 17))  # after borrowing end date
+    with pytest.raises(IndexError):
+        fixed_io_start_and_end_stubs.date_index(datetime(2022, 1, 19))  # after final pmt date
     # one day stub periods
     fixed_io_start_and_end_stubs.start_date = datetime(2020, 1, 31)
     fixed_io_start_and_end_stubs.end_date = datetime(2022, 1, 2)
@@ -402,21 +402,12 @@ def test_fixed_amortizing_custom_start_and_end_stubs(fixed_amortizing_custom_sta
     pd.testing.assert_frame_equal(expected_schedule, fixed_amortizing_custom_start_and_end_stubs.schedule())
 
 
-def test_accrued_unpaid_int(fixed_io_start_and_end_stubs):
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 1, 16)) == pytest.approx(-5333.33333333333)  # start stub prepaid
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 1, 17)) == pytest.approx(-5000.0)  # start stub prepaid
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 2, 1)) == pytest.approx(0.0)
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 2, 15)) == pytest.approx(4666.66666666667)
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2020, 3, 1)) == pytest.approx(9666.66666666667)  # pmt date 3/2
-    assert fixed_io_start_and_end_stubs.accrued_unpaid_int(datetime(2022, 1, 16)) == pytest.approx(5000.0)  # maturity date
-
-
 # Test outstanding balance
 def test_outstanding_principal(fixed_constant_amort_start_and_end_stubs):
     fixed_constant_amort_start_and_end_stubs.holidays = FederalReserveHolidays()
     fixed_constant_amort_start_and_end_stubs.adjust_pmt_date = modified_following
     fixed_constant_amort_start_and_end_stubs.end_date = datetime(2021, 12, 5)
-    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 1)) == pytest.approx(0.0)  # after final pmt date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 1)) is None  # before start date
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 2)) == pytest.approx(1000000.0)  # closing date
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 1, 15)) == pytest.approx(1000000.0)
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2020, 3, 1)) == pytest.approx(1000000.0)  # period end date with pmt 3/2
@@ -424,6 +415,8 @@ def test_outstanding_principal(fixed_constant_amort_start_and_end_stubs):
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 5)) == pytest.approx(981090.953492929)  # maturity date
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 6)) == pytest.approx(0.0)  # final pmt date
     assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 7)) == pytest.approx(0.0)  # after final pmt date
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 10, 1), include_dt=True) == pytest.approx(983991.709885)  # on pmt dt
+    assert fixed_constant_amort_start_and_end_stubs.outstanding_principal(datetime(2021, 12, 6), include_dt=True) == pytest.approx(981090.953493)  # final pmt date
 
 
 def test_payments_scheduled_dt(fixed_constant_amort_start_and_end_stubs):
@@ -462,10 +455,3 @@ def test_payments_pmt_dt(fixed_io_start_and_end_stubs):
         pd.Series(fixed_io_start_and_end_stubs.payments(datetime(2020, 1, 16), datetime(2020, 1, 16), pmt_dt=True)[0]),
         pd.Series(full_expected_output[0]))
 
-
-# Test prepayment
-def test_set_ppmt_custom(fixed_io_no_stubs):
-    fixed_io_no_stubs.set_ppmt_custom(sum)
-    assert fixed_io_no_stubs.repayment_amount.__name__ == 'sum'
-    fixed_io_no_stubs.set_ppmt_custom(sum, {'test_val1': 1, 'test_val2': 2})
-    assert (fixed_io_no_stubs.repayment_amount.__name__ == 'sum') and (fixed_io_no_stubs.prepayment_attrs == {'test_val1': 1, 'test_val2': 2})

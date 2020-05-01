@@ -108,12 +108,12 @@ class PeriodicBorrowing(_Borrowing):
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
         Optional borrowing description.
-    ppmt_calculator: BasePrepaymentCalculator
+    prepayment: BasePrepaymentCalculator
         BasePrepaymentCalculator subclass that defines prepayment terms and calculates prepayment costs.
     """
 
     def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
-                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None, ppmt_calculator=None):
+                 calc_convention=unadjusted, pmt_convention=unadjusted, holidays=None, desc=None, prepayment=None):
 
         super().__init__(desc)
         self.period_type = InterestPeriod
@@ -126,58 +126,75 @@ class PeriodicBorrowing(_Borrowing):
         self.freq = freq
         self.initial_principal = initial_principal
         self.holidays = holidays
-        self.ppmt_calculator = ppmt_calculator
+        self.prepayment = prepayment
 
         self.year_frac = year_frac
         self.adjust_calc_date = calc_convention
         self.adjust_pmt_date = pmt_convention
 
     # Indexing and accessing values
-    def date_index(self, dt):
+    def date_period(self, dt, inc_period_end=False):
         """
-        Returns the index of the period that contains the date argument. Indexes roll on period start dates for
-        for consistency with the "from and including, to and excluding" convention. So, calling this method on a roll
-        date will return the index for the period which has a matching start date, not the index with a matching end
-        date. Calling this method on the borrowing end date will return the index for the last period.
-
-        Examples
-        --------
-
-        .. code-block:: python
-
-            # Examples for a borrowing starting 2020-01-01, rolling on 2020-02-01, and maturing on 2020-03-01
-            >>> borrowing.date_index(date(2020, 1, 31))
-            0
-            >>> borrowing.date_index(date(2020, 2, 1))
-            1
-            >>> borroiwng.date_index(date(2020, 3, 1))
-            1
+        Returns the period that date falls inside. Default is inclusive of period start date and exclusive of end date.
+        Dates prior to the borrowing start date or after the max(borrowing end date, final payment date) raise and
+        index error.
 
         Parameters
         ----------
         dt: datetime-like
-            As-of date
+            Look-up date
+        inc_period_end: bool optional(default=False)
+            Determines whether roll dates are included in the ending or starting period. Be default, end dates are
+            considered the start date for the next period and are not included.
+
+        Returns
+        -------
+        InterestPeriod
+        """
+        i = self.date_index(dt, inc_period_end=inc_period_end)
+        return self.period(i)
+
+    def date_index(self, dt, inc_period_end=False):
+        """
+        Returns the index of the period that contains the date argument. Default is inclusive of period start dates and
+        exclusive of end dates. Dates prior to the borrowing start date or after the latest of the borrowing end date or
+        final payment date raise and index error.
+
+        Parameters
+        ----------
+        dt: datetime-like
+            Look-up date
+        inc_period_end: bool
+            Determines whether roll dates are included in the ending or starting period. Be default, end dates are
+            considered the start date for the next period and are not included.
 
         Returns
         -------
         int
         """
+        # TODO: add tests
         if dt < self.start_date:
             raise IndexError(f'Date {dt} is before the borrowing start date {self.start_date}.')
-        if dt > self.end_date:
-            raise IndexError(f'Date {dt} is after borrowing end date {self.end_date}.')
+
         # if dt is the borrowing end date,
         if dt == self.end_date:
             dt = dt + relativedelta(days=-1)
 
         i = 0
-        start_date = self.period_start_date(i)
-        while start_date:
-            if start_date > dt:
-                return i - 1
+        end_date = self.period_end_date(i)
+        while end_date:
+            if dt < end_date:
+                return i
+            elif (dt == end_date) and inc_period_end:
+                return i
 
             i += 1
-            start_date = self.period_start_date(i)
+            end_date = self.period_end_date(i)
+        i -= 1
+        if dt <= max(self.period_end_date(i), self.pmt_date(i)):
+            return i
+        else:
+            raise IndexError(f'Date {dt} is after the loan ends.')
 
     def payments(self, first_dt=None, last_dt=None, pmt_dt=False):
         """
@@ -218,55 +235,51 @@ class PeriodicBorrowing(_Borrowing):
 
         return list(zip(itertools.compress(dts, dt_mask), itertools.compress(pmts, dt_mask)))
 
-    def accrued_unpaid_int(self, dt):
+    def accrued_interest(self, dt, include_dt=False):  #TODO: accrued and upaid, or option for unpaid??
         """
-        Returns accrued and unpaid interest. Calculates interest to but excluding `dt`. Assumes interest paid on payment
-        dates.
-
-        Examples
-        --------
-
-        .. code-block:: python
-
-            # example with calculation periods 1st to 1st, 12% coupon, 100 principal, 30/360 day count
-            >>> borrowing.accrued_unpaid_int(date(2020, 6, 30))
-            0.9666666666666666
-            >>> borrowing.accrued_unpaid_int(date(2020, 7, 1))  # unadjusted payment dates
-            0.0
-            >>> borrowing.accrued_unpaid_int(date(2020, 7, 1))  # payment date on July 2nd
-            0.9999999999999998
-            >>> borrowing.accrued_unpaid_int(date(2020, 7, 2))  # payment date on July 2nd
-            0.03333333333333333
-
-
-        Parameters
-        ----------
-        dt: datetime-like
-            Date to accrue to (but exclude interest on)
-
-        Returns
-        -------
-        float
+        Returns the amount of interest accrued from the start of the interest period in which `dt` falls to `dt`. By
+        default, calculates interest from and including the period start date to but excluding `dt`. Set
+        `include_dt=True` to include interest accrued through and including `dt`.
         """
-        accrued = 0.0
-        paid = 0.0
+        # TODO: add tests
+        period = self.date_period(dt, inc_period_end=False)
 
-        periods = self._schedule_periods()
+        if dt >= period.get_pmt_date() or dt > period.get_end_date():
+            return 0
 
-        for p in periods:
-            yf = min(self.year_frac(p.start_date, dt) / self.year_frac(p.start_date, p.end_date), 1)
-            if dt >= p.start_date:
-                accrued += yf * p.get_interest_pmt()
-            if dt >= p.get_pmt_date():
-                paid += p.get_interest_pmt()
+        percent_period = min(self.year_frac(period.get_start_date(), dt + relativedelta(days=1 * include_dt)) /
+                             self.year_frac(period.get_start_date(), period.get_end_date()), 1)
+        return percent_period * period.get_interest_pmt()
 
-        return accrued - paid
-
-    def outstanding_principal(self, dt):
+    def unpaid_interest(self, dt, include_dt=False):
+        # TODO: maybe int and princ?
         """
-        Returns the outstanding, unpaid balance taking payment dates into account. Returns the clean amount not
-        including any accrued interest. Returns 0 for dates prior to the start date, and returns the last period's
-        beginning balance less principal payment for any date equal or greater than the final payment date.
+        Returns the total amount of unpaid interest that has fully accrued. Specifically, returns the amount of interest
+        to be paid on the payment date if `dt` is greater than or equal to the period end date but less than (or less
+        than or equal to if `include_dt=True`) the period payment date.
+
+        By default, does not include any interest due on `dt`.
+        """
+        # TODO: add tests
+        i = self.date_index(dt, inc_period_end=True)
+
+        unpaid_interest = 0
+        for i in range(0, i+1):
+            p = self.period(i)
+            if p.get_end_date() <= dt < p.get_pmt_date():
+                unpaid_interest += p.get_interest_pmt()
+            if include_dt and dt == p.get_pmt_date():
+                unpaid_interest += p.get_interest_pmt()
+
+        return unpaid_interest
+
+    def outstanding_principal(self, dt, include_dt=False):
+        """
+        Returns the clean amount not including any accrued interest. The outstanding amount contemplates payment dates
+        rather than period end dates, so the balance is not reduced by any amortization until the payment date occurs.
+
+        Returns None for dates prior to the start date, and returns the last period's beginning balance less principal
+        payment for any date equal or greater than the final payment date.
 
         See `repayment_amount` for total cost to repay including any prepayment premiums.
 
@@ -274,23 +287,27 @@ class PeriodicBorrowing(_Borrowing):
         ----------
         dt: datetime-like
             As-of date
+        include_dt: bool, optional(default=False)
+            Indicates whether to include principal payments due on `dt`
 
         Returns
         -------
         float
         """
         if dt < self.start_date:
-            return 0.0
+            return None
 
         periods = self._schedule_periods()
 
-        for p in periods:
-            if p.__getattribute__(p.pmt_date_col) > dt:
-                return p.get_bop_principal()
+        outstanding = self.initial_principal
 
-        # dt after last payment date, return last period bop balance less last period principal payment
-        p = periods[-1]
-        return p.get_bop_principal() - p.get_principal_pmt()
+        for p in periods:
+            if include_dt and dt > p.get_pmt_date():
+                outstanding -= p.get_principal_pmt()
+            elif not include_dt and dt >= p.get_pmt_date():
+                outstanding -= p.get_principal_pmt()
+
+        return outstanding
 
     # Building the schedule
     def _schedule_periods(self):
@@ -411,11 +428,11 @@ class PeriodicBorrowing(_Borrowing):
 
     # Prepayment
     def repayment_amount(self, dt):
-        """Repayment amount including any prepayment premiums as defined by the `ppmt_calculator` object. See
+        """Required repayment amount including any prepayment premiums as defined by the `prepayment` object. See
         `borrowing.outstanding_principal` for clean balance."""
-        if self.ppmt_calculator is None:
+        if self.prepayment is None:
             raise AttributeError('Must define a prepayment calculator attribute.')
-        return self.ppmt_calculator.repayment_amount(self, dt)
+        return self.prepayment.required_repayment(self, dt)
 
 
 class FixedRateBorrowing(PeriodicBorrowing):
@@ -454,7 +471,8 @@ class FixedRateBorrowing(PeriodicBorrowing):
         `year_frac` for day count convention, `pmt_convention` for business day adjustment, `first_reg_start`, etc.
     """
 
-    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, io_periods=0, **kwargs):
+    def __init__(self, start_date, end_date, freq, initial_principal, coupon, amort_periods=None, io_periods=0,
+                 **kwargs):
         super().__init__(start_date, end_date, freq, initial_principal, **kwargs)
         self.coupon = coupon
         self.amort_periods = amort_periods
@@ -495,4 +513,3 @@ class FixedRateBorrowing(PeriodicBorrowing):
 
         pmt = periodic_ir / (1 - (1 + periodic_ir) ** -self.amort_periods) * self.initial_principal
         return pmt - period.interest_payment
-
