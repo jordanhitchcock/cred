@@ -2,8 +2,9 @@ import pytest
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from cred import FixedRateBorrowing, actual360, following, unadjusted, preceding, FederalReserveHolidays
-from cred.ppmtcalculator import OpenPrepayment
+from cred import FixedRateBorrowing, actual360, following, unadjusted, preceding, FederalReserveHolidays, Monthly, \
+    thirty360
+from cred.ppmtcalculator import OpenPrepayment, StepDown, Defeasance
 
 
 @pytest.fixture
@@ -237,3 +238,112 @@ def test_open_ppmt_full_period_following(open_ppmt_full_period, fixed_constant_a
 def test_open_ppmt_full_period_outside_dates(open_ppmt_full_period, fixed_constant_amort_end_stub_unadjusted):
     assert open_ppmt_full_period.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2019, 12, 31)) is None
     assert open_ppmt_full_period.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2021, 12, 21)) is None
+
+
+# Step down penalties
+@pytest.fixture
+def stepdown_open():
+    offsets = [Monthly(6), Monthly(10), Monthly(18)]
+    premiums = [0.03, 0.02, 0.01]
+    breakage = None
+    return StepDown(expiration_offsets=offsets, premiums=premiums, period_breakage=breakage)
+
+
+@pytest.fixture
+def stepdown_no_open():
+    offsets = [Monthly(6), Monthly(10), Monthly(16), Monthly(25)]
+    premiums = [0.03, 0.02, 0.015, 0.01]
+    breakage = None
+    return StepDown(expiration_offsets=offsets, premiums=premiums, period_breakage=breakage)
+
+
+def test_stepdown_unadjusted_open(fixed_constant_amort_end_stub_unadjusted, stepdown_open):
+    assert stepdown_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2020, 3, 15)) == pytest.approx(1028127.02498053)  # middle of period
+    assert stepdown_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2020, 4, 1)) == pytest.approx(1038423.81100298)  # on pmt date
+    assert stepdown_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2021, 7, 1)) == pytest.approx(995672.542779)  # on expiration dt
+    assert stepdown_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2021, 10, 15)) == pytest.approx(982224.037210)  # in open period
+
+
+def test_stepdown_unadjusted_no_open(fixed_constant_amort_end_stub_unadjusted, stepdown_no_open):
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2021, 12, 18)) == pytest.approx(985930.936761)  # on maturity dt
+
+
+def test_stepdown_unadjusted_outside_dates(fixed_constant_amort_end_stub_unadjusted, stepdown_no_open):
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2019, 12, 31)) is None
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_unadjusted, datetime(2021, 12, 19)) is None
+
+
+def test_stepdown_preceding_no_open(fixed_constant_amort_end_stub_preceding, stepdown_no_open):
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2020, 3, 15)) == pytest.approx(1028127.02498053)  # middle of period
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2020, 4, 1)) == pytest.approx(1038423.81100298)  # on pmt date
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2020, 10, 30)) == pytest.approx(1018027.201443855)  # on pmt date adj backwards
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2020, 10, 31)) == pytest.approx(1007120.760290855)  # bw pmt dt and end dt
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2020, 11, 1)) == pytest.approx(1007120.760290855)  # on end date with pmt adj back
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2021, 12, 17)) == pytest.approx(985930.936761)  # final pmt dt
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_preceding, datetime(2021, 12, 18)) is None  # final end dt after final pmt dt
+
+
+def test_stepdown_following_no_open(fixed_constant_amort_end_stub_following, stepdown_no_open):
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 3, 15)) == pytest.approx(1028127.02498053)  # middle of period
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 4, 1)) == pytest.approx(1038423.81100298)  # on pmt date
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 5, 1)) == pytest.approx(1012246.5354849249)  # on end dt before pmt dt
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 5, 2)) == pytest.approx(1012246.5354849249)  # bw end and pmt date
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 5, 3)) == pytest.approx(1007298.4388549799)  # on pmt dt after end dt
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 19)) == pytest.approx(995734.69151832)  # after end dt before final pmt dt
+    assert stepdown_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 20)) == pytest.approx(985930.936761)  # final pmt dt
+
+
+# Test defeasance
+
+@pytest.fixture
+def df_func():
+    def df(dt1, dt2):
+        return (1 + 0.12 / 12) ** -thirty360(dt1, dt2)
+
+    return df
+
+
+@pytest.fixture
+def dfz_no_open(df_func):
+    return Defeasance(df_func=df_func, open_dt_offset=None)
+
+
+@pytest.fixture
+def dfz_to_maturity(df_func):
+    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=2, days=17), dfz_to_open=False)
+
+
+@pytest.fixture
+def dfz_to_open(df_func):
+    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=2, days=17), dfz_to_open=True)
+
+
+def test_dfz_no_open(dfz_no_open, fixed_constant_amort_end_stub_following):
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 1, 1)) == pytest.approx(1215162.77051093)  # start date
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 4, 5)) == pytest.approx(1185574.85298199)  # middle of period
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 6, 1)) == pytest.approx(1176495.85286709)  # end dt on pmt date
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 8, 1)) == pytest.approx(1156608.52701895)  # end dt before pmt date
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 8, 3)) == pytest.approx(1156672.46566125)  # pmt date after end date
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 18)) == pytest.approx(985876.436383954)  # end dt
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 19)) == pytest.approx(985903.686195882)  # bw end and final pmt dt
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 20)) == pytest.approx(985930.936761)  # on final pmt dt
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2019, 12, 31)) is None  # before start date
+    assert dfz_no_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 12, 21)) is None  # after final pmt date
+
+
+def test_dfz_to_maturity(dfz_to_maturity, fixed_constant_amort_end_stub_following):
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 1, 1)) == pytest.approx(1215162.77051093)  # start date
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 4, 5)) == pytest.approx(1185574.85298199)  # middle of period
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 6, 1)) == pytest.approx(1176495.85286709)  # end dt on pmt date
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 8, 1)) == pytest.approx(1156608.52701895)  # end dt before pmt date
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 8, 3)) == pytest.approx(1156672.46566125)  # pmt date after end date
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 10, 1)) == pytest.approx(993130.478363)  # open date
+    assert dfz_to_maturity.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 10, 2)) == pytest.approx(992373.685594)  # first day after open dt
+
+
+def test_dfz_to_open(dfz_to_open, fixed_constant_amort_end_stub_following):
+    assert dfz_to_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 1, 1)) == pytest.approx(1192223.51736981)  # start date
+    assert dfz_to_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2020, 4, 1)) == pytest.approx(1173353.8376713)  # period end date
+    assert dfz_to_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 10, 1)) == pytest.approx(993130.478363)  # open date
+    assert dfz_to_open.required_repayment(fixed_constant_amort_end_stub_following, datetime(2021, 10, 2)) == pytest.approx(992373.685594)  # first day after open dt
+

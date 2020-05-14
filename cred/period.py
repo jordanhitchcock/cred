@@ -25,7 +25,8 @@ class Period:
 
     def add_payment(self, value, name):
         """
-        Adds `value` named `name` to the period as a payment. Payment attributes are included in `period.schedule` and summed in period.payment.
+        Adds `value` as an attribute of the period object named `name` and marks it as a payment. Payment attributes are
+        included in `period.schedule`.
 
         Parameters
         ----------
@@ -40,7 +41,7 @@ class Period:
 
     def add_display_field(self, value, name):
         """
-        Adds `value` named `name` to the period as a display field. Data field attributes are included in `period.schedule`.
+        Adds `value` as an attribute named `name` to the period marks it as a display field. Display field attributes are included in `period.schedule`.
 
         Parameters
         ----------
@@ -69,7 +70,6 @@ class InterestPeriod(Period):
     """
     Period type used by PeriodicBorrowing and its subclasses.
     """
-    # TODO: add better documentation for the date methods
 
     def __init__(self, i):
         super().__init__(i)
@@ -81,53 +81,72 @@ class InterestPeriod(Period):
         self.bop_principal_col = None
 
     def add_start_date(self, dt, name=START_DATE):
+        """Add an attribute to the object and mark it as the period start date. There can only be one start date. Also
+        marks the attribute as a field that should be added to the period schedule."""
         self.start_date_col = name
         self.schedule_cols.append(name)
         self.__setattr__(name, dt)
 
     def add_end_date(self, dt, name=END_DATE):
+        """Add an attribute to the object and mark it as the period end date. There can only be one end date. Also
+        marks the attribute as a field that should be added to the period schedule."""
         self.end_date_col = name
         self.schedule_cols.append(name)
         self.__setattr__(name, dt)
 
     def add_pmt_date(self, dt, name=PAYMENT_DATE):
+        """Add an attribute to the object and mark it as the period payment date. There can only be one payment date.
+        Also marks the attribute as a field that should be added to the period schedule."""
         self.pmt_date_col = name
         self.schedule_cols.append(name)
         if not hasattr(self, PAYMENT_DATE):
             self.__setattr__(name, dt)
 
     def add_interest_pmt(self, amt, name=INTEREST_PAYMENT):
+        """Adds the value as a period attribute and marks it as an interest payment. Also added as an attribute that
+        should be included in the schedule."""
         self.interest_pmt_cols.append(name)
         self.payment_cols.append(name)
         self.schedule_cols.append(name)
         self.__setattr__(name, amt)
 
     def add_principal_pmt(self, amt, name=PRINCIPAL_PAYMENT):
+        """Adds the value as a period attribute and marks it as a principal payment. Also added as an attribute that
+        should be included in the schedule."""
         self.principal_pmt_cols.append(name)
         self.payment_cols.append(name)
         self.schedule_cols.append(name)
         self.__setattr__(name, amt)
 
     def add_bop_principal(self, amt, name=BOP_PRINCIPAL):
+        """Adds the value as a period attribute and marks it as the beginning of period principal balance. Each period
+        can only have one beginning principal balance attribute. Also added as an attribute that should be included in
+        the schedule."""
         self.bop_principal_col = name
         self.schedule_cols.append(name)
         self.__setattr__(name, amt)
 
     def get_start_date(self):
+        """Period start date"""
         return self.__getattribute__(self.start_date_col)
 
     def get_end_date(self):
+        """Period end date"""
         return self.__getattribute__(self.end_date_col)
 
     def get_pmt_date(self):
+        """Returns the sum of attributes marked as payments, interest payments, principal payments"""
         return self.__getattribute__(self.pmt_date_col)
 
     def get_interest_pmt(self):
+        """Returns the sum of attributes marked as interest payments"""
         return sum([self.__getattribute__(n) for n in self.interest_pmt_cols])
 
     def get_principal_pmt(self):
+        """Returns the sum of attributes marked as principal payments"""
         return sum([self.__getattribute__(n) for n in self.principal_pmt_cols])
 
     def get_bop_principal(self):
+        """Beginning of period (BoP) principal amount"""
         return self.__getattribute__(self.bop_principal_col)
 

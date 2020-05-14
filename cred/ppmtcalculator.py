@@ -255,6 +255,7 @@ class BasePrepaymentCalculator:
 #         return desc
 #
 
+
 class OpenPrepayment(BasePrepaymentCalculator):
 
     _period_breakage_types = [
@@ -280,7 +281,6 @@ class OpenPrepayment(BasePrepaymentCalculator):
         interest that accrues over the entire period. Building on the first example again, the "full_period" repayment
         amount would equal the outstanding principal plus the unpaid amount due on the third plus the interest that
         would accrue to but excluding the first day of the next month.
-
 
         Parameters
         ----------
@@ -330,5 +330,122 @@ class OpenPrepayment(BasePrepaymentCalculator):
             period_int = 0.0
         return unpaid + period_int
 
+    def __repr__(self):
+        repr = super(OpenPrepayment, self).__repr__()
+        repr = repr + 'Period breakage: ' + str(self.period_breakage) + '\n'
+        return repr
 
+
+class StepDown(OpenPrepayment):
+
+    def __init__(self, expiration_offsets, premiums, period_breakage='full_period'):
+        """
+        Prepayment estimator object for loan exit costs based on a percentage of outstanding principal.
+
+        Repayment costs under this structure are defined by a list of percentages in decimal form for each premium level
+        and a matching list of date offsets that denote the expiration date for each premium level.
+
+        Date offsets are applied to the borrowing's first regular period start date and then adjusted based on the
+        borrowing's `adjust_pmt_date` method. Offsets are interpreted as expiration dates, so any date on or after a
+        given expiration date would use the following premium level. Repayment dates on or after the final expiration
+        date are assumed to be open.
+
+        Premiums are applied to the to the-current outstanding principal amount outstanding. Note that the outstanding
+        principal balance is adjusted based on amortization payments made on payment dates rather than interest period
+        start and end dates.
+
+        Period breakage determines how interest payments are determined if the repayment date is not on a payment date.
+        See the `OpenPrepayment` super class for additional detail on how period breakage is determined.
+
+        Parameters
+        ----------
+        expiration_offsets: list(relativedelta.relativedelta)
+            Offsets applied to a borrowing's first regular start date to get the unadjusted expiration date for each
+            threshold level
+        premiums: list(float)
+            List of prepayment premiums expressed as a fraction of the then-current outstanding principal
+        period_breakage: str, None optional(default='full_period')
+            Period breakage type passed to OpenPrepayment, must be `None`, 'accrued_and_unpaid' or 'full_period'
+        """
+        if len(expiration_offsets) != len(premiums):
+            raise ValueError('Lists of expiration offsets and premiums must be the same lengths.')
+
+        super(StepDown, self).__init__(period_breakage)
+        self.expiration_offsets = expiration_offsets
+        self.premiums = premiums
+
+    def required_repayment(self, borrowing, dt):
+        """Required amount to prepay the borrowing at the given date."""
+        open_amt = super(StepDown, self).required_repayment(borrowing, dt)
+        ppmt_premium = self.ppmt_premium(borrowing, dt)
+        if open_amt is None:
+            return None
+        return open_amt + ppmt_premium
+
+    def ppmt_premium(self, borrowing, dt):
+        """The prepayment premium for prepaying on `dt`."""
+        principal = borrowing.outstanding_principal(dt, include_dt=False)
+        if principal is None:
+            return None
+        return principal * self.premium_pct(borrowing, dt)
+
+    def premium_pct(self, borrowing, dt):
+        """The premium at `dt` expressed as a percent in decimal form of the then outstanding balance."""
+        expir_dts = self.expiration_dates(borrowing)
+
+        if dt >= expir_dts[-1]:
+            return 0.0
+
+        expir_i = min([i for i, d in enumerate(expir_dts) if d > dt])
+        return self.premiums[expir_i]
+
+    def expiration_dates(self, borrowing):
+        """Premium expiration dates adjusted for payment date business days by applying the expiration offsets to
+        the borrowing's first regular period start date."""
+        dts = [borrowing.first_reg_start + offset for offset in self.expiration_offsets]
+        return [borrowing.adjust_pmt_date(dt, borrowing.holidays) for dt in dts]
+
+    def __repr__(self):
+        repr = super(StepDown, self).__repr__()
+        repr = repr + 'Offsets: ' + str(self.expiration_offsets) + '\n'
+        repr = repr + 'Premiums: ' + str(self.premiums) + '\n'
+        return repr
+
+
+class Defeasance(OpenPrepayment):
+
+    def __init__(self, df_func, open_dt_offset=None, dfz_to_open=False, period_breakage='full_period'):
+        """
+
+        Parameters
+        ----------
+        df_func
+        open_dt_offset
+        dfz_to_open
+        period_breakage
+        """
+        super(Defeasance, self).__init__(period_breakage)
+        self.df = df_func
+        self.open_dt_offset = open_dt_offset
+        self.dfz_to_open = dfz_to_open
+
+    def required_repayment(self, borrowing, dt):
+        open_dt = self.open_date(borrowing)
+
+        open_pmt = super(Defeasance, self).required_repayment(borrowing, dt)
+        if open_pmt is None or (open_dt and (dt >= open_dt)):
+            return open_pmt
+
+        dfz_to = (self.dfz_to_open or None) and open_dt
+        pmt_dts, pmts = zip(*borrowing.payments(first_dt=dt, last_dt=dfz_to, pmt_dt=True))
+        dfs = [self.df(dt, pmt_dt) for pmt_dt in pmt_dts]
+
+        pv_periodic = sum([df * pmt for df, pmt in zip(dfs, pmts)])
+        pv_balloon = self.df(dt, pmt_dts[-1]) * borrowing.outstanding_principal(pmt_dts[-1], include_dt=False)
+        return pv_periodic + pv_balloon
+
+    def open_date(self, borrowing):
+        if self.open_dt_offset is None:
+            return None
+        return borrowing.end_date - self.open_dt_offset
 
