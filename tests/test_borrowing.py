@@ -35,14 +35,14 @@ def test_period(simple_borrowing_subclass):
 
 
 def test_context_manager(simple_borrowing_subclass):
-    assert len(simple_borrowing_subclass._periods) == 0
+    assert len(simple_borrowing_subclass._cached_periods) == 0
     with simple_borrowing_subclass as sbs:
         sbs.period(2)
-        assert len(sbs._periods) == 1
+        assert len(sbs._cached_periods) == 1
         sbs.period(0)
-        assert len(sbs._periods) == 2
+        assert len(sbs._cached_periods) == 2
 
-    assert len(simple_borrowing_subclass._periods) == 0
+    assert len(simple_borrowing_subclass._cached_periods) == 0
 
 
 def test_create_period(simple_borrowing_subclass):

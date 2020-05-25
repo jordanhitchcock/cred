@@ -13,7 +13,7 @@ class _Borrowing:
 
     def __init__(self, desc=None):
         self.desc = desc
-        self._periods = {}
+        self._cached_periods = {}
         self._in_context = False
         self._cache = False
         self.period_type = Period
@@ -32,13 +32,13 @@ class _Borrowing:
         if i < 0:
             raise IndexError('Cannot access period with index less than 0')
 
-        if (self._cache is True) and (i in self._periods.keys()):
-            return self._periods[i]
+        if (self._cache is True) and (i in self._cached_periods.keys()):
+            return self._cached_periods[i]
 
         p = self._create_period(i)
 
         if self._cache is True:
-            self._periods[i] = p
+            self._cached_periods[i] = p
 
         return p
 
@@ -57,6 +57,7 @@ class _Borrowing:
     def _stop_caching(self):
         if not self._in_context:
             self._cache = False
+            self._cached_periods = {}
             self._periods = {}
 
     def set_period_values(self, period):
@@ -149,6 +150,10 @@ class PeriodicBorrowing(_Borrowing):
     @property
     def holidays(self):
         return self._holidays
+
+    @property
+    def periods(self):
+        return self._schedule_periods()
 
     # Indexing and accessing values
     def date_period(self, dt, inc_period_end=False):
@@ -253,7 +258,7 @@ class PeriodicBorrowing(_Borrowing):
 
         return list(zip(itertools.compress(dts, dt_mask), itertools.compress(pmts, dt_mask)))
 
-    def accrued_interest(self, dt, include_dt=False):  #TODO: accrued and upaid, or option for unpaid??
+    def accrued_interest(self, dt, include_dt=False):
         """
         Returns the amount of interest accrued from the start of the interest period in which `dt` falls to `dt`. By
         default, calculates interest from and including the period start date to but excluding `dt`. Set
@@ -262,34 +267,46 @@ class PeriodicBorrowing(_Borrowing):
         # TODO: add tests
         period = self.date_period(dt, inc_period_end=False)
 
-        if dt >= period.get_pmt_date() or dt > period.get_end_date():
+        if dt > period.get_end_date():
             return 0
 
         percent_period = min(self.year_frac(period.get_start_date(), dt + relativedelta(days=1 * include_dt)) /
                              self.year_frac(period.get_start_date(), period.get_end_date()), 1)
         return percent_period * period.get_interest_pmt()
 
-    def unpaid_interest(self, dt, include_dt=False):
-        # TODO: maybe int and princ?
+    def unpaid_amount(self, dt, int=True, princ=True, include_dt=False):
         """
-        Returns the total amount of unpaid interest that has fully accrued. Specifically, returns the amount of interest
-        to be paid on the payment date if `dt` is greater than or equal to the period end date but less than (or less
-        than or equal to if `include_dt=True`) the period payment date.
+        Returns the total unpaid interest and/or principal, if any. Specifically, returns the amount of interest to be
+        paid on the payment date if `dt` is greater than or equal to the period end date but less than (or less than or
+        equal to if `include_dt=True`) the period payment date and/or any scheduled principal payments if dt is between
+        the period end date and payment date.
 
-        By default, does not include any interest due on `dt`.
+        By default, does not include any payments due on `dt`.
+
+        Parameters
+        ----------
+        dt: datetime-like
+            Date of evaluation
+        int: bool
+            Include unpaid interest if True
+        princ: bool
+            Include unpaid principal if True
         """
         # TODO: add tests
         i = self.date_index(dt, inc_period_end=True)
 
-        unpaid_interest = 0
+        unpaid_int = 0
+        unpaid_princ = 0
         for i in range(0, i+1):
             p = self.period(i)
             if p.get_end_date() <= dt < p.get_pmt_date():
-                unpaid_interest += p.get_interest_pmt()
+                unpaid_int += p.get_interest_pmt() * int
+                unpaid_princ += p.get_principal_pmt() * princ
             if include_dt and dt == p.get_pmt_date():
-                unpaid_interest += p.get_interest_pmt()
+                unpaid_int += p.get_interest_pmt() * int
+                unpaid_princ += p.get_principal_pmt() * princ
 
-        return unpaid_interest
+        return unpaid_int + unpaid_princ
 
     def outstanding_principal(self, dt, include_dt=False):
         """

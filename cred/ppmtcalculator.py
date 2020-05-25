@@ -1,6 +1,9 @@
+from dateutil.relativedelta import relativedelta
+
+from cred.interest_rate import thirty360
 
 
-class BasePrepaymentCalculator:
+class AbstractPrepayment:
 
     def __init__(self):
         self.ppmt_type = self.__class__.__name__
@@ -12,251 +15,8 @@ class BasePrepaymentCalculator:
         desc = 'Type: ' + self.ppmt_type + '\n'
         return desc
 
-#
-# class Defeasance(BasePrepaymentCalculator):
-#
-#     def __init__(self, df_func, open_dt_offset, dfz_to_open):
-#         super(Defeasance, self).__init__('defeasance')
-#         self.df = df_func
-#         self.open_dt_offset = open_dt_offset
-#         self.dfz_to_open = dfz_to_open
-#
-#     def repayment_amount(self, borrowing, dt):
-#         """
-#         Returns total repayment cost including accrued and unpaid interest and estimated securities cost for repaying the
-#         borrowing on `dt` if the borrowing is subject to defeasance. Estimates defeasance cost by discounting future
-#         payments from their adjusted payment date. If the borrowing's property `dfz_to_open == True`, future cash flows are
-#         terminated on the open date at the outstanding principal balance plus any accrued and unpaid interest. The open
-#         window start date is determined by applying the borrowing's `open_dt_offset` to the borrowing end date.
-#
-#         Realized defeasance costs will differ based on inefficiencies in the underlying securities portfolio, fees, and any
-#         variations in specific loan language (e.g. requirement that securities payout on the first business day prior to the
-#         unadjusted period end dates).
-#         """
-#
-#         # return None if dt is before start_date or after the final pmt date
-#         if (dt < borrowing.start_date) or (dt > borrowing.adjust_pmt_date(borrowing.end_date, borrowing.holidays)):
-#             return None
-#
-#         # calc first open date
-#         open_date = None
-#         if self.open_dt_offset is not None:
-#             open_date = borrowing.end_date - self.open_dt_offset
-#
-#         # if dt in open window
-#         if open_date and dt >= open_date:
-#             remaining_pmts = dict(borrowing.payments(dt, pmt_dt=True))
-#             next_pmt_dt = min([pmt for pmt in remaining_pmts.keys() if pmt >= dt])
-#             return borrowing.outstanding_principal(next_pmt_dt) + remaining_pmts[next_pmt_dt]
-#
-#         # if dt prior to open date
-#         if self.dfz_to_open:
-#             remaining_pmts = self._pmts_between_dates(borrowing, dt, open_date)
-#         else:
-#             remaining_pmts = dict(borrowing.payments(first_dt=dt, pmt_dt=True))
-#
-#         pv = 0
-#         for pmt_dt, pmt in remaining_pmts.items():
-#             pv += self.df(dt, pmt_dt) * pmt
-#
-#         return pv
-#
-#     def _pmts_between_dates(self, borrowing, start_dt, end_dt):
-#         # TODO: Should this be a borrowing method?
-#         """
-#         Returns a dict of {payment date: payment} pairs for scheduled payments from `start_dt` to `end_dt` , inclusive,
-#         where the payment amount on `end_dt` equals the outstanding balance plus accrued and unpaid interest.
-#         """
-#         remaining_pmts = dict(borrowing.payments(first_dt=start_dt, last_dt=end_dt, pmt_dt=True))
-#
-#         filtered_pmts = {k: v for k, v in remaining_pmts.items() if k <= end_dt}
-#         repayment_dt_pmt = filtered_pmts.get(end_dt, 0)
-#         repayment_dt_pmt += borrowing.outstanding_principal(end_dt) + borrowing.accrued_unpaid_int(end_dt)
-#         filtered_pmts[end_dt] = repayment_dt_pmt
-#         return filtered_pmts
-#
-#     def __repr__(self):
-#         desc = super(Defeasance, self).__repr__()
-#         desc = desc + 'Open window offset: ' + str(self.open_dt_offset) + '\n'
-#         desc = desc + 'Defease to open date: ' + str(self.dfz_to_open) + '\n'
-#         desc = desc + 'Discount factors: ' + self.df.__name__ + '\n'
-#         return desc
-#
-#
-# class Stepdown(BasePrepaymentCalculator):
-#
-#     def __init__(self, expiration_offsets, premiums):
-#         """
-#         Prepayment calculator for penalties based on the percentage of outstanding principal. Repayment amount equals
-#         the applicable premium times the outstanding principal balance plus interest through the next payment date. The
-#         lists of date offsets and premiums must be the same length. Assumes 0.0% premium for any dates after the final
-#         expiration offset.
-#
-#
-#         Parameters
-#         ----------
-#         expiration_offsets: list(dateutil.relativedelta.relativedelta)
-#             Expiration dates for each percentage level (i.e. threshold will apply up to but excluding the offset date).
-#             Offsets applied to the first regular period start date.
-#         premiums: list(float)
-#
-#         """
-#         if len(expiration_offsets) != len(premiums):
-#             raise ValueError(f'Length of offsets ({len(expiration_offsets)} does not equal the length of thresholds '
-#                              f'{len(premiums)}.')
-#
-#         super(Stepdown, self).__init__('stepdown')
-#         self.expiration_offsets = expiration_offsets
-#         self.premiums = premiums
-#
-#     def repayment_amount(self, borrowing, dt):
-#         """
-#         Total cost of repayment including prepayment premium and interest through the next payment date. Assumes a
-#         0.0% premium for all dates after the last defined expiration offset. Returns `None` for any dates before the
-#         borrowing start date or after the final payment date.
-#
-#         Parameters
-#         ----------
-#         borrowing: PeriodicBorrowing
-#             Borrowing to calculate the repayment amount on.
-#         dt: datetime-like
-#             Date of repayment.
-#
-#         Returns
-#         -------
-#         float
-#         """
-#         pmts = borrowing.payments(pmt_dt=True)
-#
-#         if dt < borrowing.start_date or dt > pmts[-1][0]:
-#             return None
-#
-#         pmts = dict(pmts)
-#         next_pmt_dt = min([pmt for pmt in pmts.keys() if pmt >= dt])
-#
-#         expiration_dts = [borrowing.start_date + offset for offset in self.expiration_offsets]
-#         premiums = dict(zip(expiration_dts, self.premiums))
-#
-#         if dt >= max(expiration_dts):
-#             applicable_premium = 1.0
-#         else:
-#             expir_dt = min([ex_dt for ex_dt in expiration_dts if ex_dt > dt])
-#             applicable_premium = 1 + premiums[expir_dt]
-#
-#         return applicable_premium * borrowing.outstanding_principal(dt) + pmts[next_pmt_dt]
-#
-#     def __repr__(self):
-#         desc = super(Stepdown, self).__repr__()
-#         desc = desc + 'Expiration offsets: ' + repr(self.expiration_offsets) + '\n'
-#         desc = desc + 'Premiums: ' + repr(self.premiums) + '\n'
-#         return desc
-#
-#
-# class YieldMaintenance(BasePrepaymentCalculator):
-#
-#     undiscounted_int_methods = [
-#         'unpaid', 'accrued_and_unpaid', 'full_period'
-#     ]
-#
-#     def __init__(self, rate_func, spread=0.0, undiscounted_interest='full_period', first_discount_pmt=0,
-#                  ym_to_open=False, open_dt_offset=None, min_premium=None):
-#         """
-#         Yield maintenance calculator object that can be applied to PeriodicBorrowings.
-#
-#         Parameters
-#         ----------
-#         rate_func: function
-#             Function that takes two dates and returns the yield between them stated in an semi-annual compounding terms
-#         spread: float optional(default=0.0)
-#             Spread added to the benchmark rate for discounting
-#         undiscounted_interest: str optional(default='full_period')
-#             String that defines undiscounted interest to be paid on the closing date. Must be one of the following:
-#                 `unpaid`: Any interest from the previous period that remains unpaid
-#                 `accrued_and_unpaid`: Unpaid interest plus, if prepaid on a date other than a period end date, interest
-#                 accrued from the the period start date to but excluding the date of prepayment
-#                 `full_period`: Any unpaid interest plus, if prepaid on a date other than a period end date, any interest
-#                 accruing through the end of the current interest period
-#         first_discount_pmt: int, default=0
-#             First payment to discount. 0 is the next payment, 1 skips the next payment and starts discounting the
-#             from the following payment, etc...
-#         ym_to_open: bool, default=False
-#             Boolean indicating whether to discount cash flows through the open window or through maturity
-#         open_dt_offset: dateutil.relativedelta.relativedelta, default=None
-#             `None` if no open period. Otherwise, the date offset from the borrowing end date for the first open date
-#         min_premium: float, default=None
-#             `None` if no minimum prepayment penalty, otherwise a float representing the minimum penalty expressed as a
-#             percent of principal
-#         """
-#         super(YieldMaintenance, self).__init__('yield_maintenance')
-#         self.benchmark_rate = rate_func
-#         self.spread = spread
-#         if undiscounted_interest not in self.undiscounted_int_methods:
-#             raise ValueError(f'undiscounted_interest must be one of: {self.undiscounted_int_methods}.')
-#         else:
-#             self.undiscounted_interest = undiscounted_interest
-#         self.first_discount_pmt = first_discount_pmt
-#         self.open_dt_offset = open_dt_offset
-#         self.min_premium = min_premium
-#         self.ym_to_open = ym_to_open
-#
-#     def repayment_amount(self, borrowing, dt):
-#         """
-#         Returns the total repayment as of `dt` including accrued interest due and any applicable yield maintenance
-#         penalty. Return `None` if the repayment date is before the borrowing start date or after the final payment date.
-#
-#         Parameters
-#         ----------
-#         borrowing: PeriodicBorrowing
-#             Borrowing to calculate repayment on
-#         dt: datetime-like
-#             Date of repayment
-#
-#         Returns
-#         -------
-#         float
-#         """
-#         # TODO: this doesn't work for preceding pmt convention
-#         if dt < borrowing.start_date or dt > borrowing.adjust_pmt_date(borrowing.end_date):
-#             return None
-#         open_dt = borrowing.end_date - self.open_dt_offset
-#
-#         if dt >= open_dt:
-#             return 'open'
-#
-#         undiscounted_int = self.calc_undiscounted_interest(borrowing, dt)
-#         ym_penalty = self.ym_penalty(borrowing, dt)
-#
-#         return borrowing.outstanding_principal(dt) + undiscounted_int + ym_penalty  # TODO: also need to include any unpaid principal payments
-#
-#     def calc_undiscounted_interest(self, borrowing, dt):
-#         """Returns the undiscounted interest due"""
-#         undiscounted_int = borrowing.unpaid_interest(dt, include_dt=True)
-#         if self.undiscounted_interest == 'accrued_and_unpaid':
-#             undiscounted_int += borrowing.accrued_unpaid_int(dt, include_dt=False)
-#         elif self.undiscounted_interest == 'full_period':
-#             p = borrowing.date_period(dt, inc_period_end=True)
-#             if dt != p.get_start_date():
-#                 undiscounted_int += p.get_interest_pmt()
-#
-#         return undiscounted_int
-#
-#     def discounted_cash_flows(self, borrowing, dt):
-#         pass
-#
-#     def __repr__(self):
-#         desc = super(YieldMaintenance, self).__repr__()
-#         desc = desc + 'Benchmark rate: ' + self.benchmark_rate.__name__ + '\n'
-#         desc = desc + 'Spread to benchmark rate: ' + f'{self.spread * 100:.0%} bps' + '\n'
-#         desc = desc + 'Undiscounted interest: ' + str(self.undiscounted_interest) + '\n'
-#         desc = desc + 'First discounted payment: ' + str(self.first_discount_pmt) + '\n'
-#         desc = desc + 'Calculate YM to open: ' + str(self.ym_to_open) + '\n'
-#         desc = desc + 'Open date offset: ' + str(self.open_dt_offset) + '\n'
-#         desc = desc + 'Minimum penalty: ' + f'{self.min_premium * 100:.0%} bps' + '\n'
-#         return desc
-#
 
-
-class OpenPrepayment(BasePrepaymentCalculator):
+class OpenPrepayment(AbstractPrepayment):
 
     _period_breakage_types = [
         None,
@@ -302,27 +62,33 @@ class OpenPrepayment(BasePrepaymentCalculator):
         amt = borrowing.outstanding_principal(dt, include_dt=True)
 
         if self.period_breakage is None or self.period_breakage == 'accrued_and_unpaid':
-            amt += self.unpaid_amount(borrowing, dt)
+            amt += self.unpaid_interest(borrowing, dt)
         if self.period_breakage == 'accrued_and_unpaid':
-            amt += self.accrued_interest(borrowing, dt)
+            amt += self.net_accrued_interest(borrowing, dt)
         if self.period_breakage == 'full_period':
             amt += self.unpaid_and_current_period_interest(borrowing, dt)
 
         return amt
 
-    def unpaid_amount(self, borrowing, dt):
+    def unpaid_interest(self, borrowing, dt):
         """Unpaid interest, including interest due on `dt`."""
-        return borrowing.unpaid_interest(dt, include_dt=True)
+        return borrowing.unpaid_amount(dt, int=True, princ=False, include_dt=True)
 
-    def accrued_interest(self, borrowing, dt):
-        """Accrued interest during the period in which `dt` falls. Calculates interest from and including the first day
-        of the period, to but excluding `dt`."""
-        return borrowing.accrued_interest(dt, include_dt=False)
+    def net_accrued_interest(self, borrowing, dt):
+        """
+        Accrued but interest during the period in which `dt` falls. Calculates interest from and including the first day
+        of the period, to but excluding `dt` net of any amount already paid.
+        """
+        accrued = borrowing.accrued_interest(dt, include_dt=False)
+        period = borrowing.date_period(dt)
+        if dt >= period.get_pmt_date():
+            accrued = max(accrued - period.get_interest_pmt(), 0)
+        return accrued
 
     def unpaid_and_current_period_interest(self, borrowing, dt):
         """Unpaid interest including interest due on `dt` plus interest accruing through the end of the period in which
         `dt` falls."""
-        unpaid = borrowing.unpaid_interest(dt, include_dt=True)
+        unpaid = borrowing.unpaid_amount(dt, int=True, princ=False, include_dt=True)
         period = borrowing.date_period(dt, inc_period_end=True)
         if dt < period.get_pmt_date() and dt < period.get_end_date():
             period_int = period.get_interest_pmt()
@@ -416,13 +182,26 @@ class Defeasance(OpenPrepayment):
 
     def __init__(self, df_func, open_dt_offset=None, dfz_to_open=False, period_breakage='full_period'):
         """
+        Prepayment class for PeriodicBorrowings that estimates the cost of defeasance substitution collateral.
+        This class takes a function which returns the appropriate discount factor between the closing date and each
+        future payment date to estimate the cost of substitution collateral. The cost of collateral equals the sum of
+        discount factors times the remaining future payments.
+
+        Remaining future payments can either be structured to the open date or through maturity. The first open date is
+        calculated by applying the open date offset to the borrowing end date. Interest period breakage during the open
+        window is calculated using the same method described in `OpenPrepayment` based on `period_breakage`.
 
         Parameters
         ----------
-        df_func
-        open_dt_offset
-        dfz_to_open
-        period_breakage
+        df_func: function
+            Function that takes two dates and returns the discount factor between them
+        open_dt_offset: date-offset
+            Date offset from borrowing end date of the first open date
+        dfz_to_open: bool
+            Boolean indicating whether to defease cash flows through the open date or maturity
+        period_breakage: str, None optional(default='full_period')
+            Period breakage type passed to OpenPrepayment, must be `None`, 'accrued_and_unpaid' or 'full_period' passed
+            to OpenPrepayment
         """
         super(Defeasance, self).__init__(period_breakage)
         self.df = df_func
@@ -430,6 +209,7 @@ class Defeasance(OpenPrepayment):
         self.dfz_to_open = dfz_to_open
 
     def required_repayment(self, borrowing, dt):
+        """Return the total estimated cost of replacement collateral"""
         open_dt = self.open_date(borrowing)
 
         open_pmt = super(Defeasance, self).required_repayment(borrowing, dt)
@@ -445,7 +225,172 @@ class Defeasance(OpenPrepayment):
         return pv_periodic + pv_balloon
 
     def open_date(self, borrowing):
+        """Open date for borrowing"""
         if self.open_dt_offset is None:
             return None
         return borrowing.end_date - self.open_dt_offset
+
+    def __repr__(self):
+        repr = super(Defeasance, self).__repr__()
+        repr = repr + 'Discount factors: ' + self.df.__name__ + '\n'
+        repr = repr + 'Open date offset: ' + str(self.open_dt_offset) + '\n'
+        repr = repr + 'Defease to open: ' + str(self.dfz_to_open) + '\n'
+        return repr
+
+
+class SimpleYieldMaintenance(OpenPrepayment):
+
+    def __init__(self, rate_func, margin=0.0, wal_rate=False, open_dt_offset=None, ym_to_open=False, min_penalty=None,
+                 period_breakage='full_period'):
+        """
+        Prepayment class for estimating yield maintenance on PeriodicBorrowings. Discounts remaining payments (either to
+        maturity or to the open date) at an annual rate equal to the index rate provided by `rate_func` plus the margin.
+        The index rate will can be structured to mirror either the term of the remaining payments (i.e. maturity or
+        the open date depending on which date the yeild maintenance is structured to) or the weighted average life (WAL)
+        of remaining payments. Discount factors are built assuming a simple periodic rate equal to the discount rate
+        divided by frequency of borrowing's interest periods. See the `discount_factor` method for detail.
+
+        Future payments are discounted from their unadjusted period end dates rather than payment dates.
+
+        Minimum penalties apply during the yield maintenance period. If there is a minimum penalty, the required
+        repayment amount will be equal to the greater of yield maintenance or the open prepayment amount plus the
+        outstanding principal amount times the min penalty percent.
+
+        Parameters
+        ----------
+        rate_func: function
+            Function that takes two dates and returns the annualized index rate used in discounting
+        margin: float, optional(default=0.0)
+            The additional margin added to the index rate used in discounting, if any
+        wal_rate: bool, optional(default=False)
+            True if the term of the index rate used for discounting should match the weighted average life of the
+            remaining payments, False if it should match the term of the final scheduled payment (either the open date
+            or maturity).
+        open_dt_offset: date-offset, optional(default=None)
+            Date offset to apply to the borrowing's end date to get the first day of the open window or None if now open
+            window.
+        ym_to_open: bool, optional(default=False)
+            True if cash flows should be discounted to the open window, False if cash flows should be discounted to
+            maturity. Affects the discount rate if `wal_rate == False`.
+        min_penalty: float, optional(default=None)
+            Minimum penalty as a percent of the outstanding principal balance or None if no min penalty.
+        period_breakage: str, None optional(default='full_period')
+            Period breakage type passed to OpenPrepayment, must be `None`, 'accrued_and_unpaid' or 'full_period' passed
+            to OpenPrepayment
+        """
+        super(SimpleYieldMaintenance, self).__init__(period_breakage=period_breakage)
+        self.index_rate = rate_func
+        self.margin = margin
+        self.wal_rate = wal_rate
+        self.open_dt_offset = open_dt_offset
+        self.ym_to_open = ym_to_open  # TODO: Check must have open dt offset
+        self.min_penalty = min_penalty
+
+    def required_repayment(self, borrowing, dt):
+        open_pmt = super(SimpleYieldMaintenance, self).required_repayment(borrowing, dt)
+
+        open_dt = self.open_date(borrowing)
+        if open_pmt is None or (open_dt and dt >= open_dt):
+            return open_pmt
+
+        pmts = self.remaining_pmts(borrowing, dt)
+        dfs = self.discount_factors(borrowing, dt)
+
+        repay_amt = sum([df * pmt for df, pmt in zip(dfs, pmts.values())])
+
+        if self.min_penalty:
+            repay_amt = max(repay_amt, self.min_repayment_amount(borrowing, dt))
+
+        return repay_amt + borrowing.unpaid_amount(dt, int=True, princ=True, include_dt=True)
+
+    def open_date(self, borrowing):
+        """Open date for borrowing."""
+        if self.open_dt_offset is None:
+            return None
+        return borrowing.end_date - self.open_dt_offset
+
+    def min_repayment_amount(self, borrowing, dt):
+        return borrowing.outstanding_principal(dt, include_dt=False) * (1 + self.min_penalty)
+
+    def discount_factors(self, borrowing, dt):
+        """Discount factors used to calculate yield maintenance."""
+        pmts = self.remaining_pmts(borrowing, dt)
+
+        periodic_rate = self.discount_rate(borrowing, dt) * thirty360(dt, dt + borrowing.freq)
+        yfs = [borrowing.year_frac(dt, pmt_dt) for pmt_dt in pmts.keys()]
+        dfs = [(1 + periodic_rate) ** -yf for yf in yfs]
+        return dfs
+
+    def discount_rate(self, borrowing, dt):
+        """Discount rate for yield maintenance at date."""
+        open_dt = self.open_date(borrowing)
+
+        if open_dt and dt >= open_dt:
+            raise ValueError('Date is on or after the open date')
+        if dt < borrowing.start_date:
+            raise ValueError('Date is before the borrowing start date')
+
+        if self.wal_rate:
+            term_date = dt + relativedelta(days=self.discount_rate_term(borrowing, dt))
+        else:
+            term_date = (self.ym_to_open and open_dt) or borrowing.end_date
+        return self.index_rate(dt, term_date) + self.margin
+
+    def discount_rate_term(self, borrowing, dt):
+        """Return the number of days used to calculate the term of the discount rate. If `wal_rate` is True, returns the
+        weight avgerage number of remaining days. If `ym_to_open` is True, calculates (weighted avg) days to the open
+        date rather than the maturity date."""
+        discount_to_dt = (self.ym_to_open and self.open_date(borrowing)) or borrowing.end_date
+
+        if self.wal_rate:
+            ym_to_dt = (self.ym_to_open and self.open_date(borrowing)) or borrowing.end_date
+
+            princ_pmts = {}
+            for p in borrowing.periods:
+
+                # regularly scheduled principal
+                if (dt < p.get_end_date() <= ym_to_dt) and (p.get_pmt_date() > dt):
+                    princ_pmts[p.get_end_date()] = p.get_principal_pmt()
+
+                # balloon
+                if p.get_start_date() <= ym_to_dt < p.get_end_date() and p.get_start_date() >= dt:
+                    princ_pmts[ym_to_dt] = princ_pmts.get(ym_to_dt, 0) + p.get_bop_principal()
+
+            if ym_to_dt < borrowing.end_date:
+                princ_pmts[ym_to_dt] = princ_pmts.get(ym_to_dt, 0)
+
+            cum_princ = sum(princ_pmts.values())
+            days = sum([(end_dt - dt).days * princ / cum_princ for end_dt, princ in princ_pmts.items()])
+        else:
+            days = (discount_to_dt - dt).days
+
+        return days
+
+    def remaining_pmts(self, borrowing, dt):
+        """
+        Principal and interest payments from `dt` to maturity, or the open date if `ym_to_open` is True. Based on
+        period end dates. The last payment will include all outstanding principal and accrued interest. Return value is
+        a dict of {pmt_date: pmt} pairs.
+        """
+        ym_to_dt = (self.ym_to_open and self.open_date(borrowing)) or borrowing.end_date
+
+        pmts = {}
+        for p in borrowing.periods:
+            # regularly scheduled p&i
+            if (dt < p.get_end_date() <= ym_to_dt) and (p.get_pmt_date() > dt):
+                pmts[p.get_end_date()] = p.get_principal_pmt() + p.get_interest_pmt()
+
+            # balloon
+            if p.get_start_date() <= ym_to_dt < p.get_end_date() and p.get_start_date() >= dt:
+                pmts[ym_to_dt] = pmts.get(ym_to_dt, 0) + p.get_bop_principal()
+
+        if ym_to_dt < borrowing.end_date:
+            pmts[ym_to_dt] = pmts.get(ym_to_dt, 0) + borrowing.accrued_interest(ym_to_dt, include_dt=False)
+
+        return pmts
+
+    def __str__(self):
+        pass
+
+
 
