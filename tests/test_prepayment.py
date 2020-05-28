@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 
 from cred import FixedRateBorrowing, actual360, following, unadjusted, preceding, FederalReserveHolidays, Monthly, \
     thirty360
-from cred.ppmtcalculator import OpenPrepayment, StepDown, Defeasance, SimpleYieldMaintenance
+from cred.prepayment import OpenPrepayment, StepDown, Defeasance, SimpleYieldMaintenance
 
 
 @pytest.fixture

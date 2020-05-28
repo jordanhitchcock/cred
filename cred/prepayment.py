@@ -1,6 +1,6 @@
 from dateutil.relativedelta import relativedelta
 
-from cred.interest_rate import thirty360
+from cred.interest_rate import periods_in_year
 
 
 class AbstractPrepayment:
@@ -283,7 +283,7 @@ class SimpleYieldMaintenance(OpenPrepayment):
         self.margin = margin
         self.wal_rate = wal_rate
         self.open_dt_offset = open_dt_offset
-        self.ym_to_open = ym_to_open  # TODO: Check must have open dt offset
+        self.ym_to_open = ym_to_open
         self.min_penalty = min_penalty
 
     def required_repayment(self, borrowing, dt):
@@ -316,7 +316,7 @@ class SimpleYieldMaintenance(OpenPrepayment):
         """Discount factors used to calculate yield maintenance."""
         pmts = self.remaining_pmts(borrowing, dt)
 
-        periodic_rate = self.discount_rate(borrowing, dt) * thirty360(dt, dt + borrowing.freq)
+        periodic_rate = self.discount_rate(borrowing, dt) * 1 / periods_in_year(borrowing.freq)
         yfs = [borrowing.year_frac(dt, pmt_dt) for pmt_dt in pmts.keys()]
         dfs = [(1 + periodic_rate) ** -yf for yf in yfs]
         return dfs
@@ -389,8 +389,13 @@ class SimpleYieldMaintenance(OpenPrepayment):
 
         return pmts
 
-    def __str__(self):
-        pass
-
-
+    def __repr__(self):
+        repr = super(SimpleYieldMaintenance, self).__repr__()
+        repr = repr + 'Index rate: ' + str(self.index_rate.__name__) + '\n'
+        repr = repr + 'Margin: ' + f'{self.margin:.2%}' + '\n'
+        repr = repr + 'Index rate term: ' + ((self.wal_rate and 'weighted average life') and 'open/maturity') + '\n'
+        repr = repr + 'Open date offset: ' + str(self.open_dt_offset) + '\n'
+        repr = repr + 'Discount cash flows to: ' + ((self.ym_to_open and 'open date') and 'maturity') + '\n'
+        repr = repr + 'Min penalty: ' + '{:.1%}'.format(self.min_penalty) + '\n'
+        return repr
 
