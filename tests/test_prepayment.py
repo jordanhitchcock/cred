@@ -216,12 +216,12 @@ def dfz_no_open(df_func):
 
 @pytest.fixture
 def dfz_to_maturity(df_func):
-    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=2, days=17), dfz_to_open=False)
+    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=-2, days=-17), dfz_to_open=False)
 
 
 @pytest.fixture
 def dfz_to_open(df_func):
-    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=2, days=17), dfz_to_open=True)
+    return Defeasance(df_func=df_func, open_dt_offset=relativedelta(months=-2, days=-17), dfz_to_open=True)
 
 
 def test_dfz_no_open(dfz_no_open, fixed_constant_amort_end_stub_following):

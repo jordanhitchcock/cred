@@ -3,7 +3,7 @@ from dateutil.relativedelta import relativedelta
 from cred.interest_rate import periods_in_year
 
 
-class AbstractPrepayment:
+class BasePrepayment:
 
     def __init__(self):
         self.ppmt_type = self.__class__.__name__
@@ -16,7 +16,7 @@ class AbstractPrepayment:
         return desc
 
 
-class OpenPrepayment(AbstractPrepayment):
+class OpenPrepayment(BasePrepayment):
 
     _period_breakage_types = [
         None,
@@ -72,7 +72,7 @@ class OpenPrepayment(AbstractPrepayment):
 
     def unpaid_interest(self, borrowing, dt):
         """Unpaid interest, including interest due on `dt`."""
-        return borrowing.unpaid_amount(dt, int=True, princ=False, include_dt=True)
+        return borrowing.unpaid_amount(dt, interest=True, princ=False, include_dt=True)
 
     def net_accrued_interest(self, borrowing, dt):
         """
@@ -88,7 +88,7 @@ class OpenPrepayment(AbstractPrepayment):
     def unpaid_and_current_period_interest(self, borrowing, dt):
         """Unpaid interest including interest due on `dt` plus interest accruing through the end of the period in which
         `dt` falls."""
-        unpaid = borrowing.unpaid_amount(dt, int=True, princ=False, include_dt=True)
+        unpaid = borrowing.unpaid_amount(dt, interest=True, princ=False, include_dt=True)
         period = borrowing.date_period(dt, inc_period_end=True)
         if dt < period.get_pmt_date() and dt < period.get_end_date():
             period_int = period.get_interest_pmt()
@@ -196,7 +196,7 @@ class Defeasance(OpenPrepayment):
         df_func: function
             Function that takes two dates and returns the discount factor between them
         open_dt_offset: date-offset
-            Date offset from borrowing end date of the first open date
+            Date offset from borrowing end date to the first open prepayment date
         dfz_to_open: bool
             Boolean indicating whether to defease cash flows through the open date or maturity
         period_breakage: str, None optional(default='full_period')
@@ -228,7 +228,7 @@ class Defeasance(OpenPrepayment):
         """Open date for borrowing"""
         if self.open_dt_offset is None:
             return None
-        return borrowing.end_date - self.open_dt_offset
+        return borrowing.end_date + self.open_dt_offset
 
     def __repr__(self):
         repr = super(Defeasance, self).__repr__()
@@ -267,7 +267,7 @@ class SimpleYieldMaintenance(OpenPrepayment):
             remaining payments, False if it should match the term of the final scheduled payment (either the open date
             or maturity).
         open_dt_offset: date-offset, optional(default=None)
-            Date offset to apply to the borrowing's end date to get the first day of the open window or None if now open
+            Date offset to apply to the borrowing's end date to get the first day of the open window or None if no open
             window.
         ym_to_open: bool, optional(default=False)
             True if cash flows should be discounted to the open window, False if cash flows should be discounted to
@@ -301,13 +301,13 @@ class SimpleYieldMaintenance(OpenPrepayment):
         if self.min_penalty:
             repay_amt = max(repay_amt, self.min_repayment_amount(borrowing, dt))
 
-        return repay_amt + borrowing.unpaid_amount(dt, int=True, princ=True, include_dt=True)
+        return repay_amt + borrowing.unpaid_amount(dt, interest=True, princ=True, include_dt=True)
 
     def open_date(self, borrowing):
         """Open date for borrowing."""
         if self.open_dt_offset is None:
             return None
-        return borrowing.end_date - self.open_dt_offset
+        return borrowing.end_date + self.open_dt_offset
 
     def min_repayment_amount(self, borrowing, dt):
         return borrowing.outstanding_principal(dt, include_dt=False) * (1 + self.min_penalty)

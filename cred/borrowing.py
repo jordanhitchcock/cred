@@ -73,7 +73,7 @@ class _Borrowing:
         raise NotImplementedError
 
     def schedule(self):
-        """Return borrowing schedule. Must be implemented by subclasses"""
+        """Return borrowing schedule. Must be implemented by subclasses."""
         raise NotImplementedError
 
 
@@ -111,7 +111,7 @@ class PeriodicBorrowing(_Borrowing):
     desc: int, str, optional(default=None)
         Optional borrowing description.
     prepayment: BasePrepaymentCalculator
-        BasePrepaymentCalculator subclass that defines prepayment terms and calculates prepayment costs.
+        Optional BasePrepayment subclass that defines prepayment terms and calculates prepayment costs.
     """
 
     def __init__(self, start_date, end_date, freq, initial_principal, first_reg_start=None, year_frac=actual360,
@@ -274,7 +274,7 @@ class PeriodicBorrowing(_Borrowing):
                              self.year_frac(period.get_start_date(), period.get_end_date()), 1)
         return percent_period * period.get_interest_pmt()
 
-    def unpaid_amount(self, dt, int=True, princ=True, include_dt=False):
+    def unpaid_amount(self, dt, interest=True, princ=True, include_dt=False):
         """
         Returns the total unpaid interest and/or principal, if any. Specifically, returns the amount of interest to be
         paid on the payment date if `dt` is greater than or equal to the period end date but less than (or less than or
@@ -287,10 +287,12 @@ class PeriodicBorrowing(_Borrowing):
         ----------
         dt: datetime-like
             Date of evaluation
-        int: bool
+        interest: bool
             Include unpaid interest if True
         princ: bool
             Include unpaid principal if True
+        include_dt: bool
+            Include amounts scheduled to be paid on `dt`
         """
         # TODO: add tests
         i = self.date_index(dt, inc_period_end=True)
@@ -300,10 +302,10 @@ class PeriodicBorrowing(_Borrowing):
         for i in range(0, i+1):
             p = self.period(i)
             if p.get_end_date() <= dt < p.get_pmt_date():
-                unpaid_int += p.get_interest_pmt() * int
+                unpaid_int += p.get_interest_pmt() * interest
                 unpaid_princ += p.get_principal_pmt() * princ
             if include_dt and dt == p.get_pmt_date():
-                unpaid_int += p.get_interest_pmt() * int
+                unpaid_int += p.get_interest_pmt() * interest
                 unpaid_princ += p.get_principal_pmt() * princ
 
         return unpaid_int + unpaid_princ
