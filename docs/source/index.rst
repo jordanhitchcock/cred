@@ -1,21 +1,31 @@
 Welcome to **cred**'s Documentation!
 ====================================
 
-.. include:: ../../README.rst
-    :start-line: 2
 
-
-User Guide
-----------
+Table of Contents
+-----------------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Overview:
+
+   overview
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference:
 
    borrowing
-   period
    businessdays
    helpers
+   period
+   prepayment
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Changelog:
+
    changelog
 
 

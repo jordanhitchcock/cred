@@ -12,6 +12,9 @@
 
 import os
 import sys
+
+import sphinx_rtd_theme
+
 sys.path.insert(0, os.path.abspath('../..'))
 
 master_doc = 'index'
@@ -34,7 +37,8 @@ release = '0.0.1'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx_rtd_theme',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -51,7 +55,7 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'default'
+html_theme = "sphinx_rtd_theme"
 RTD_NEW_THEME = True
 
 # Add any paths that contain custom static files (such as style sheets) here,

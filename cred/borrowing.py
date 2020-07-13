@@ -110,7 +110,7 @@ class PeriodicBorrowing(_Borrowing):
         Payment holidays to use in adjusting payment dates. Defaults to None.
     desc: int, str, optional(default=None)
         Optional borrowing description.
-    prepayment: BasePrepaymentCalculator
+    prepayment: BasePrepayment, optional(default=None)
         Optional BasePrepayment subclass that defines prepayment terms and calculates prepayment costs.
     """
 

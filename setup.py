@@ -8,9 +8,9 @@ README = (HERE / "README.rst").read_text()
 
 setup(
     name='cred',
-    version='0.0.2',
+    version='0.1.0',
     packages=['cred'],
-    description='Making commercial real estate debt modeling and scenario analytics for easy',
+    description='Model commercial real estate debt',
     keywords='real-estate debt mortgage finance',
     long_description=README,
     long_description_content_type='text/x-rst',

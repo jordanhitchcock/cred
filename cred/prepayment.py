@@ -1,14 +1,33 @@
 from dateutil.relativedelta import relativedelta
 
 from cred.interest_rate import periods_in_year
+from cred.borrowing import PeriodicBorrowing
 
 
 class BasePrepayment:
 
     def __init__(self):
+        """
+        Base class for prepayment classes. Subclass and define the `required_repayment` method to create custom prepayment types.
+        """
         self.ppmt_type = self.__class__.__name__
 
     def required_repayment(self, borrowing, dt):
+        """
+        Calculate the prepayment amount. Called by PeriodicBorrowings to calculate prepayment. Must be implemented by subclasses.
+
+        Parameters
+        ----------
+        borrowing: PeriodicBorrowing
+            Borrowing to use in calculating prepayment amount
+        dt: datetime
+            Date of repayment
+
+        Returns
+        -------
+        float
+
+        """
         raise NotImplementedError
 
     def __repr__(self):
